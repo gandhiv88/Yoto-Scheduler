@@ -28,7 +28,8 @@
               "com.gvalliappan.yotoscheduler"
             ]
           }
-        ]
+        ],
+        "UIBackgroundModes": ["background-fetch", "background-processing"]
       }
     },
     "android": {
@@ -38,6 +39,11 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.gvalliappan.yotoscheduler",
+      "permissions": [
+        "android.permission.WAKE_LOCK",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",
@@ -59,7 +65,17 @@
     },
     "plugins": [
       "expo-dev-client",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ffffff",
+          "sounds": []
+        }
+      ],
+      "expo-task-manager",
+      "expo-background-fetch"
     ],
     "experiments": {
       "typedRoutes": false

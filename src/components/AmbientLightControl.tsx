@@ -8,7 +8,6 @@ import {
   Switch,
   ScrollView,
 } from 'react-native';
-import Slider from '@react-native-community/slider';
 import type { YotoPlayer } from '../types/index';
 
 interface MqttClient {
@@ -238,16 +237,27 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
         {/* Brightness Control */}
         <View style={styles.brightnessContainer}>
           <Text style={styles.label}>Brightness: {brightness}%</Text>
-          <Slider
-            style={styles.slider}
-            minimumValue={0}
-            maximumValue={100}
-            value={brightness}
-            onValueChange={setBrightness}
-            minimumTrackTintColor="#007AFF"
-            maximumTrackTintColor="#E0E0E0"
-            step={1}
-          />
+          
+          {/* Brightness Control Buttons */}
+          <View style={styles.brightnessControls}>
+            <TouchableOpacity
+              style={styles.brightnessButton}
+              onPress={() => setBrightness(Math.max(0, brightness - 10))}
+            >
+              <Text style={styles.brightnessButtonText}>-10</Text>
+            </TouchableOpacity>
+            
+            <View style={styles.brightnessDisplay}>
+              <Text style={styles.brightnessText}>{brightness}%</Text>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.brightnessButton}
+              onPress={() => setBrightness(Math.min(100, brightness + 10))}
+            >
+              <Text style={styles.brightnessButtonText}>+10</Text>
+            </TouchableOpacity>
+          </View>
           
           {/* Brightness Presets */}
           <View style={styles.presetContainer}>
@@ -339,16 +349,25 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
           {isNightLightEnabled && (
             <View style={styles.nightLightBrightnessContainer}>
               <Text style={styles.label}>Night Light Brightness: {nightLightBrightness}%</Text>
-              <Slider
-                style={styles.slider}
-                minimumValue={5}
-                maximumValue={50}
-                value={nightLightBrightness}
-                onValueChange={setNightLightBrightness}
-                minimumTrackTintColor="#FFA726"
-                maximumTrackTintColor="#E0E0E0"
-                step={1}
-              />
+              <View style={styles.brightnessControls}>
+                <TouchableOpacity
+                  style={styles.brightnessButton}
+                  onPress={() => setNightLightBrightness(Math.max(5, nightLightBrightness - 5))}
+                >
+                  <Text style={styles.brightnessButtonText}>-5</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.brightnessDisplay}>
+                  <Text style={styles.brightnessText}>{nightLightBrightness}%</Text>
+                </View>
+                
+                <TouchableOpacity
+                  style={styles.brightnessButton}
+                  onPress={() => setNightLightBrightness(Math.min(50, nightLightBrightness + 5))}
+                >
+                  <Text style={styles.brightnessButtonText}>+5</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
@@ -456,15 +475,43 @@ const styles = StyleSheet.create({
   brightnessContainer: {
     marginBottom: 20,
   },
+  brightnessControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+  },
+  brightnessButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginHorizontal: 10,
+  },
+  brightnessButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  brightnessDisplay: {
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  brightnessText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+  },
   label: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
     marginBottom: 10,
-  },
-  slider: {
-    width: '100%',
-    height: 40,
   },
   presetContainer: {
     flexDirection: 'row',

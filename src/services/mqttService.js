@@ -10,6 +10,7 @@ export class MqttClient {
     this.connectionStatusCallback = null;
     this.lastConnectionTime = null;
     this.connectionHealthTimer = null;
+    this.schedulerCheckInterval = null;
   }
 
   async connect(playerId, token) {
@@ -249,27 +250,49 @@ export class MqttClient {
       throw new Error('MQTT client not connected');
     }
 
-    // Use correct Yoto MQTT topic format (like working implementation)
+    // Use correct Yoto MQTT topic format: /device/{id}/command/card/start
     const topic = `device/${playerId}/command/card/start`;
     
     // Build payload according to Yoto specification
     const payload = {
-      uri: cardUri, // Required field
-      ...options    // Optional: chapterKey, trackKey, secondsIn, cutOff, anyButtonStop
+      uri: cardUri // Required field: Card URI (e.g., https://yoto.io/<cardID> or just cardID)
     };
+
+    // Add optional parameters if provided
+    if (options.chapterKey) {
+      payload.chapterKey = options.chapterKey; // Chapter to start playback from
+    }
+    if (options.trackKey) {
+      payload.trackKey = options.trackKey; // Track to start playback from
+    }
+    if (typeof options.secondsIn === 'number') {
+      payload.secondsIn = options.secondsIn; // Playback start offset (in seconds)
+    }
+    if (typeof options.cutOff === 'number') {
+      payload.cutOff = options.cutOff; // Playback stop offset (in seconds)
+    }
+    if (typeof options.anyButtonStop === 'boolean') {
+      payload.anyButtonStop = options.anyButtonStop; // Whether button press stops playback
+    }
 
     const message = JSON.stringify(payload);
 
-    console.log(`🎵 [MQTT] Publishing play command to: ${topic}`);
-    console.log(`🎵 [MQTT] Payload:`, payload);
+    console.log(`🎵 [MQTT] Publishing card start command to: ${topic}`);
+    console.log(`🎵 [MQTT] Full payload:`, payload);
+    console.log(`🎵 [MQTT] Card URI format:`, {
+      original: cardUri,
+      isFullUrl: cardUri.includes('https://'),
+      isYotoUrl: cardUri.includes('yoto.io'),
+      length: cardUri.length
+    });
 
     return new Promise((resolve, reject) => {
       this.client.publish(topic, message, { qos: 1 }, (error) => {
         if (error) {
-          console.error('❌ [MQTT] Failed to publish play command:', error);
+          console.error('❌ [MQTT] Failed to publish card start command:', error);
           reject(error);
         } else {
-          console.log(`✅ [MQTT] Published play command for card URI: ${cardUri}`, payload);
+          console.log(`✅ [MQTT] Published card start command for URI: ${cardUri}`);
           resolve();
         }
       });
@@ -297,13 +320,17 @@ export class MqttClient {
   }
 
   async pausePlayback(playerId) {
-    if (!this.isConnected || !this.client) {
+    if (!this.isConnectionHealthy()) {
+      console.error('❌ [MQTT] Connection not healthy for pause operation');
       throw new Error('MQTT client not connected');
     }
 
     // Use correct Yoto MQTT topic for pause command
     const topic = `device/${playerId}/command/card/pause`;
-    const message = JSON.stringify({});
+    const payload = {};
+    const message = JSON.stringify(payload);
+
+    console.log(`⏸️ [MQTT] Publishing card pause command to: ${topic}`);
 
     return new Promise((resolve, reject) => {
       this.client.publish(topic, message, { qos: 1 }, (error) => {
@@ -311,7 +338,7 @@ export class MqttClient {
           console.error('❌ [MQTT] Failed to publish pause command:', error);
           reject(error);
         } else {
-          console.log('⏸️ [MQTT] Published pause command');
+          console.log('✅ [MQTT] Published card pause command');
           resolve();
         }
       });
@@ -319,13 +346,17 @@ export class MqttClient {
   }
 
   async resumePlayback(playerId) {
-    if (!this.isConnected || !this.client) {
+    if (!this.isConnectionHealthy()) {
+      console.error('❌ [MQTT] Connection not healthy for resume operation');
       throw new Error('MQTT client not connected');
     }
 
     // Use correct Yoto MQTT topic for resume command
     const topic = `device/${playerId}/command/card/resume`;
-    const message = JSON.stringify({});
+    const payload = {};
+    const message = JSON.stringify(payload);
+
+    console.log(`▶️ [MQTT] Publishing card resume command to: ${topic}`);
 
     return new Promise((resolve, reject) => {
       this.client.publish(topic, message, { qos: 1 }, (error) => {
@@ -333,7 +364,7 @@ export class MqttClient {
           console.error('❌ [MQTT] Failed to publish resume command:', error);
           reject(error);
         } else {
-          console.log('▶️ [MQTT] Published resume command');
+          console.log('✅ [MQTT] Published card resume command');
           resolve();
         }
       });
@@ -341,13 +372,17 @@ export class MqttClient {
   }
 
   async stopPlayback(playerId) {
-    if (!this.isConnected || !this.client) {
+    if (!this.isConnectionHealthy()) {
+      console.error('❌ [MQTT] Connection not healthy for stop operation');
       throw new Error('MQTT client not connected');
     }
 
     // Use correct Yoto MQTT topic for stop command
     const topic = `device/${playerId}/command/card/stop`;
-    const message = JSON.stringify({});
+    const payload = {};
+    const message = JSON.stringify(payload);
+
+    console.log(`⏹️ [MQTT] Publishing card stop command to: ${topic}`);
 
     return new Promise((resolve, reject) => {
       this.client.publish(topic, message, { qos: 1 }, (error) => {
@@ -355,7 +390,7 @@ export class MqttClient {
           console.error('❌ [MQTT] Failed to publish stop command:', error);
           reject(error);
         } else {
-          console.log('⏹️ [MQTT] Published stop command');
+          console.log('✅ [MQTT] Published card stop command');
           resolve();
         }
       });

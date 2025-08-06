@@ -1,6 +1,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import * as Crypto from 'expo-crypto';
+import * as SecureStore from 'expo-secure-store';
 
 // Complete the auth session on web browsers
 WebBrowser.maybeCompleteAuthSession();
@@ -11,12 +12,18 @@ export class YotoAuth {
   static YOTO_AUTH_ENDPOINT = 'https://login.yotoplay.com/authorize';
   static YOTO_TOKEN_ENDPOINT = 'https://login.yotoplay.com/oauth/token';
   
+  // Storage keys for secure storage
+  static ACCESS_TOKEN_KEY = 'yoto_access_token';
+  static REFRESH_TOKEN_KEY = 'yoto_refresh_token';
+  static TOKEN_EXPIRY_KEY = 'yoto_token_expiry';
+  
   // Prevent multiple auth sessions running simultaneously 
   static isAuthInProgress = false;
   
   // Store PKCE values for the current session
   static currentCodeVerifier = null;
   static currentCodeChallenge = null;
+  static processedAuthCodes = new Set(); // Track processed authorization codes
 
   // Generate PKCE code verifier (random string)
   static async generateCodeVerifier() {
@@ -100,6 +107,9 @@ export class YotoAuth {
   // Get the OAuth URL for WebView with PKCE (fallback to standard OAuth if PKCE fails)
   static async getAuthUrl() {
     try {
+      // Clear any previous processed codes for new auth session
+      this.processedAuthCodes.clear();
+      
       // Debug: Check what crypto is available
       console.log('🔍 [PKCE] Crypto module available:', !!Crypto);
       console.log('🔍 [PKCE] digestStringAsync available:', !!Crypto.digestStringAsync);
@@ -275,6 +285,18 @@ export class YotoAuth {
 
   static async exchangeCodeForToken(code) {
     try {
+      // Prevent processing the same authorization code multiple times
+      if (this.processedAuthCodes.has(code)) {
+        console.log('⚠️ [TOKEN] Authorization code already processed, skipping...');
+        return {
+          success: false,
+          error: 'Authorization code already used'
+        };
+      }
+      
+      // Mark this code as being processed
+      this.processedAuthCodes.add(code);
+      
       const isPkceFlow = !!this.currentCodeVerifier;
       const flowType = isPkceFlow ? 'PKCE' : 'standard OAuth';
       
@@ -324,6 +346,14 @@ export class YotoAuth {
 
       if (response.ok && data.access_token) {
         console.log(`✅ [TOKEN] ${flowType} token exchange successful`);
+        
+        // Store tokens securely
+        await this.storeTokens({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          expires_in: data.expires_in
+        });
+        
         return {
           success: true,
           access_token: data.access_token,
@@ -356,14 +386,162 @@ export class YotoAuth {
     this.CLIENT_ID = clientId;
   }
 
-  static async isAuthenticated() {
-    // Simple check - just return false for now since we're not storing tokens in this simple version
-    return false;
+  // Store tokens securely
+  static async storeTokens(tokenData) {
+    try {
+      console.log('💾 [STORAGE] Storing tokens securely...');
+      
+      await SecureStore.setItemAsync(this.ACCESS_TOKEN_KEY, tokenData.access_token);
+      
+      if (tokenData.refresh_token) {
+        await SecureStore.setItemAsync(this.REFRESH_TOKEN_KEY, tokenData.refresh_token);
+      }
+      
+      if (tokenData.expires_in) {
+        const expiryTime = Date.now() + (tokenData.expires_in * 1000);
+        await SecureStore.setItemAsync(this.TOKEN_EXPIRY_KEY, expiryTime.toString());
+      }
+      
+      console.log('✅ [STORAGE] Tokens stored successfully');
+    } catch (error) {
+      console.error('❌ [STORAGE] Failed to store tokens:', error);
+      throw error;
+    }
   }
 
+  // Check if tokens are stored and valid
+  static async isAuthenticated() {
+    try {
+      const accessToken = await SecureStore.getItemAsync(this.ACCESS_TOKEN_KEY);
+      const expiryStr = await SecureStore.getItemAsync(this.TOKEN_EXPIRY_KEY);
+      
+      if (!accessToken) {
+        console.log('❌ [AUTH] No access token found');
+        return false;
+      }
+      
+      if (expiryStr) {
+        const expiryTime = parseInt(expiryStr);
+        const now = Date.now();
+        
+        if (now >= expiryTime) {
+          console.log('❌ [AUTH] Token has expired');
+          // Try to refresh token
+          const refreshed = await this.refreshTokenIfNeeded();
+          return refreshed;
+        }
+      }
+      
+      console.log('✅ [AUTH] Valid token found');
+      return true;
+    } catch (error) {
+      console.error('❌ [AUTH] Error checking authentication status:', error);
+      return false;
+    }
+  }
+
+  // Get current access token
   static async getCurrentToken() {
-    // Simple implementation - return null since we're not storing tokens
-    return null;
+    try {
+      // Check if token needs refresh first
+      const refreshed = await this.refreshTokenIfNeeded();
+      if (!refreshed) {
+        console.log('❌ [TOKEN] Token refresh failed or no valid token');
+        return null;
+      }
+      
+      const accessToken = await SecureStore.getItemAsync(this.ACCESS_TOKEN_KEY);
+      
+      if (!accessToken) {
+        console.log('❌ [TOKEN] No access token found in storage');
+        return null;
+      }
+      
+      console.log('✅ [TOKEN] Retrieved access token from storage');
+      return accessToken;
+    } catch (error) {
+      console.error('❌ [TOKEN] Error retrieving token:', error);
+      return null;
+    }
+  }
+
+  // Refresh token if needed
+  static async refreshTokenIfNeeded() {
+    try {
+      const expiryStr = await SecureStore.getItemAsync(this.TOKEN_EXPIRY_KEY);
+      const refreshToken = await SecureStore.getItemAsync(this.REFRESH_TOKEN_KEY);
+      
+      if (!refreshToken) {
+        console.log('❌ [REFRESH] No refresh token available');
+        return false;
+      }
+      
+      // Check if token expires within next 5 minutes
+      const now = Date.now();
+      const bufferTime = 5 * 60 * 1000; // 5 minutes
+      
+      if (expiryStr) {
+        const expiryTime = parseInt(expiryStr);
+        
+        if (now + bufferTime < expiryTime) {
+          console.log('✅ [REFRESH] Token still valid, no refresh needed');
+          return true;
+        }
+      }
+      
+      console.log('🔄 [REFRESH] Refreshing access token...');
+      
+      const response = await fetch(this.YOTO_TOKEN_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: this.CLIENT_ID,
+          refresh_token: refreshToken,
+        }).toString(),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.access_token) {
+        console.log('✅ [REFRESH] Token refresh successful');
+        
+        // Store new tokens
+        await this.storeTokens({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token || refreshToken, // Keep old refresh token if new one not provided
+          expires_in: data.expires_in
+        });
+        
+        return true;
+      } else {
+        console.error('❌ [REFRESH] Token refresh failed:', data.error || response.statusText);
+        // Clear invalid tokens
+        await this.clearTokens();
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ [REFRESH] Error refreshing token:', error);
+      return false;
+    }
+  }
+
+  // Clear stored tokens
+  static async clearTokens() {
+    try {
+      console.log('🗑️ [STORAGE] Clearing stored tokens...');
+      
+      await SecureStore.deleteItemAsync(this.ACCESS_TOKEN_KEY);
+      await SecureStore.deleteItemAsync(this.REFRESH_TOKEN_KEY);
+      await SecureStore.deleteItemAsync(this.TOKEN_EXPIRY_KEY);
+      
+      console.log('✅ [STORAGE] Tokens cleared successfully');
+    } catch (error) {
+      console.error('❌ [STORAGE] Error clearing tokens:', error);
+    }
   }
 
   static async initiateLogin() {
@@ -426,10 +604,14 @@ export class YotoAuth {
 
   static async logout() {
     console.log('🔓 [AUTH] User logged out');
+    // Clear stored tokens
+    await this.clearTokens();
     // Clear PKCE state on logout
     this.currentCodeVerifier = null;
     this.currentCodeChallenge = null;
     this.isAuthInProgress = false;
+    // Clear processed auth codes
+    this.processedAuthCodes.clear();
     return { success: true };
   }
 

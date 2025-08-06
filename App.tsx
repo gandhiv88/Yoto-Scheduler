@@ -16,7 +16,9 @@ import { StatusBar } from 'expo-status-bar';
 import { YotoAuth } from './src/services/authService';
 import { YotoAPI } from './src/services/apiService';
 import { MqttClient } from './src/services/mqttService';
+import { SchedulerService } from './src/services/simpleSchedulerService';
 import { AmbientLightControl } from './src/components/AmbientLightControl';
+import { SchedulerScreen } from './src/components/SchedulerScreen';
 import type { YotoPlayer, YotoCard } from './src/types/index';
 
 const CLIENT_ID = 'NJ4lW4Y3FrBcpR4R6YlkKs30gTxPjvC4';
@@ -31,6 +33,8 @@ export default function App() {
   const [mqttClient, setMqttClient] = useState<MqttClient | null>(null);
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
   const [showAmbientControl, setShowAmbientControl] = useState(false);
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [processedCallbackUrl, setProcessedCallbackUrl] = useState<string | null>(null);
 
   const [authUrl, setAuthUrl] = useState<string>('');
 
@@ -38,6 +42,9 @@ export default function App() {
     console.log('App component mounted, checking authentication status...');
     checkAuthenticationStatus();
     setupDeepLinking();
+    
+    // Initialize scheduler service
+    SchedulerService.initialize().catch(console.error);
   }, []);
 
   const setupDeepLinking = () => {
@@ -104,6 +111,12 @@ export default function App() {
     try {
       const userCards = await YotoAPI.getUserContent();
       console.log('✅ [APP] User content loaded successfully');
+      console.log('🎵 [CARDS] Card details:', userCards.map(card => ({
+        id: card.id,
+        title: card.title,
+        contentType: card.contentType || 'unknown',
+        uri: card.uri
+      })));
       setCards(userCards);
     } catch (error) {
       console.error('❌ [APP] Failed to load user content:', error);
@@ -115,6 +128,7 @@ export default function App() {
     try {
       const url = await YotoAuth.getAuthUrl();
       setAuthUrl(url);
+      setProcessedCallbackUrl(null); // Reset processed URL for new auth session
       setShowWebViewLogin(true);
     } catch (error) {
       console.error('Failed to get auth URL:', error);
@@ -125,13 +139,6 @@ export default function App() {
   const handleWebViewClose = () => {
     console.log('🔄 [AUTH] WebView closed');
     setShowWebViewLogin(false);
-  };
-
-  const handleWebViewLoad = async () => {
-    console.log('✅ [AUTH] Login successful via WebView');
-    setShowWebViewLogin(false);
-    setIsAuthenticated(true);
-    await loadPlayers();
   };
 
   const handleLogout = async () => {
@@ -148,6 +155,7 @@ export default function App() {
       setMqttClient(null);
       setConnectionStatus('Disconnected');
       setShowAmbientControl(false);
+      setShowScheduler(false);
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -174,6 +182,10 @@ export default function App() {
       if (connected) {
         setMqttClient(client);
         setSelectedPlayer(player);
+        
+        // Pass MQTT client to scheduler service for foreground execution
+        SchedulerService.setMqttClient(client);
+        
         Alert.alert('Success', `Connected to ${player.name}`);
       } else {
         Alert.alert('Failed', 'Could not connect to player');
@@ -192,8 +204,28 @@ export default function App() {
       return;
     }
 
+    // Create proper Yoto URI format if not already provided
+    let cardUri = card.uri;
+    if (!cardUri) {
+      // Construct the proper Yoto URI format: https://yoto.io/<cardID>
+      cardUri = `https://yoto.io/${card.id}`;
+    } else if (!cardUri.startsWith('https://yoto.io/') && !cardUri.startsWith('http')) {
+      // If URI is provided but not in full format, construct it
+      cardUri = `https://yoto.io/${card.uri}`;
+    }
+
+    console.log('🎵 [PLAY] Attempting to play card:', {
+      cardId: card.id,
+      cardTitle: card.title,
+      originalUri: card.uri,
+      constructedUri: cardUri,
+      hasOriginalUri: !!card.uri,
+      playerId: selectedPlayer.id,
+      playerName: selectedPlayer.name
+    });
+
     try {
-      await mqttClient.playCard(selectedPlayer.id, card.id);
+      await mqttClient.playCard(selectedPlayer.id, cardUri);
       Alert.alert('Success', `Playing ${card.title}`);
     } catch (error) {
       console.error('Play error:', error);
@@ -215,6 +247,19 @@ export default function App() {
     }
   };
 
+  const disconnectFromPlayer = () => {
+    if (mqttClient) {
+      console.log('🔌 [DISCONNECT] Disconnecting from MQTT client');
+      mqttClient.disconnect();
+      setMqttClient(null);
+      setSelectedPlayer(null);
+      setConnectionStatus('Disconnected');
+      Alert.alert('Disconnected', 'Successfully disconnected from player');
+    } else {
+      Alert.alert('Info', 'No active connection to disconnect');
+    }
+  };
+
   if (!isAuthenticated) {
     console.log('🔓 [RENDER] User not authenticated, showing login screen. ShowWebView:', showWebViewLogin);
     
@@ -223,11 +268,56 @@ export default function App() {
         <SafeAreaView style={styles.container}>
           <WebView
             source={{ uri: authUrl }}
-            onNavigationStateChange={(navState) => {
+            onNavigationStateChange={async (navState) => {
               console.log('🔗 [LOGIN] Navigation to:', navState.url);
               if (navState.url.includes('code=')) {
                 console.log('✅ [LOGIN] Authorization code detected in URL');
-                handleWebViewLoad();
+                
+                // Prevent processing the same callback URL multiple times
+                if (processedCallbackUrl === navState.url) {
+                  console.log('⚠️ [LOGIN] Already processed this callback URL, skipping...');
+                  return;
+                }
+                
+                // Mark this URL as being processed
+                setProcessedCallbackUrl(navState.url);
+                console.log('� [DEBUG] STARTING CALLBACK PROCESSING NOW');
+                console.log('�🔍 [DEBUG] Callback URL:', navState.url);
+                
+                // Process the callback URL to exchange code for tokens
+                try {
+                  console.log('🔄 [DEBUG] Calling handleOAuthCallback...');
+                  const callbackResult = await YotoAuth.handleOAuthCallback(navState.url);
+                  console.log('🔍 [DEBUG] Callback result:', { 
+                    success: callbackResult.success, 
+                    hasTokens: !!callbackResult.tokens,
+                    error: callbackResult.error 
+                  });
+                  
+                  if (callbackResult.success) {
+                    console.log('✅ [AUTH] Token exchange successful from WebView');
+                    setShowWebViewLogin(false);
+                    
+                    // Check if tokens are now available
+                    const isNowAuthenticated = await YotoAuth.isAuthenticated();
+                    console.log('🔍 [DEBUG] Is now authenticated after token exchange:', isNowAuthenticated);
+                    
+                    setIsAuthenticated(isNowAuthenticated);
+                    if (isNowAuthenticated) {
+                      await loadPlayers();
+                    }
+                  } else {
+                    console.error('❌ [AUTH] Token exchange failed:', callbackResult.error);
+                    setShowWebViewLogin(false);
+                    Alert.alert('Login Failed', callbackResult.error || 'Failed to complete login');
+                  }
+                } catch (error) {
+                  console.error('❌ [AUTH] Error processing callback:', error);
+                  setShowWebViewLogin(false);
+                  Alert.alert('Login Error', 'Failed to process login callback');
+                }
+                
+                console.log('🏁 [DEBUG] Navigation handler completed');
               }
             }}
             onLoadStart={() => console.log('🔄 [LOGIN] WebView load started')}
@@ -266,6 +356,17 @@ export default function App() {
     );
   }
 
+  if (showScheduler && selectedPlayer) {
+    return (
+      <SchedulerScreen
+        player={selectedPlayer}
+        cards={cards}
+        mqttClient={mqttClient}
+        onBack={() => setShowScheduler(false)}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="auto" />
@@ -279,9 +380,19 @@ export default function App() {
 
         {/* Connection Status */}
         <View style={styles.statusContainer}>
-          <Text style={styles.statusText}>Status: {connectionStatus}</Text>
+          <Text style={styles.statusText}>MQTT Connection: {connectionStatus}</Text>
           {selectedPlayer && (
-            <Text style={styles.playerText}>Connected to: {selectedPlayer.name}</Text>
+            <>
+              <Text style={styles.playerText}>Connected to: {selectedPlayer.name}</Text>
+              <View style={styles.connectionButtonsContainer}>
+                <TouchableOpacity style={styles.disconnectButton} onPress={disconnectFromPlayer}>
+                  <Text style={styles.disconnectButtonText}>Disconnect</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.refreshButton} onPress={refreshConnection}>
+                  <Text style={styles.refreshButtonText}>Refresh</Text>
+                </TouchableOpacity>
+              </View>
+            </>
           )}
         </View>
 
@@ -316,6 +427,35 @@ export default function App() {
             >
               <Text style={styles.controlButtonText}>💡 Ambient Light Control</Text>
             </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.controlButton}
+              onPress={() => setShowScheduler(true)}
+            >
+              <Text style={styles.controlButtonText}>📅 Card Scheduler</Text>
+            </TouchableOpacity>
+            
+            {/* Playback Controls */}
+            <View style={styles.playbackControlsContainer}>
+              <TouchableOpacity
+                style={styles.playbackButton}
+                onPress={() => mqttClient.pausePlayback(selectedPlayer.id)}
+              >
+                <Text style={styles.playbackButtonText}>⏸️ Pause</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.playbackButton}
+                onPress={() => mqttClient.resumePlayback(selectedPlayer.id)}
+              >
+                <Text style={styles.playbackButtonText}>▶️ Resume</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.playbackButton, styles.stopButton]}
+                onPress={() => mqttClient.stopPlayback(selectedPlayer.id)}
+              >
+                <Text style={styles.playbackButtonText}>⏹️ Stop</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -323,15 +463,35 @@ export default function App() {
         {cards.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Your Cards</Text>
+            {!mqttClient && (
+              <View style={styles.disconnectedNotice}>
+                <Text style={styles.disconnectedNoticeText}>
+                  🔌 Connect to a player to control card playback
+                </Text>
+              </View>
+            )}
             {cards.slice(0, 5).map((card) => (
               <TouchableOpacity
                 key={card.id}
-                style={styles.cardButton}
+                style={[
+                  styles.cardButton,
+                  !mqttClient && styles.cardButtonDisabled
+                ]}
                 onPress={() => playCard(card)}
                 disabled={!mqttClient}
               >
-                <Text style={styles.cardTitle}>{card.title}</Text>
-                <Text style={styles.cardSubtitle}>Tap to play</Text>
+                <Text style={[
+                  styles.cardTitle,
+                  !mqttClient && styles.cardTitleDisabled
+                ]}>
+                  {card.title}
+                </Text>
+                <Text style={[
+                  styles.cardSubtitle,
+                  !mqttClient && styles.cardSubtitleDisabled
+                ]}>
+                  {mqttClient ? 'Tap to play' : 'Connect to player first'}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -517,5 +677,82 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     color: '#666',
+  },
+  connectionButtonsContainer: {
+    flexDirection: 'row',
+    marginTop: 10,
+    gap: 10,
+  },
+  disconnectButton: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flex: 1,
+  },
+  disconnectButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  refreshButton: {
+    backgroundColor: '#34C759',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flex: 1,
+  },
+  refreshButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  playbackControlsContainer: {
+    flexDirection: 'row',
+    marginTop: 15,
+    gap: 10,
+  },
+  playbackButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    flex: 1,
+    alignItems: 'center',
+  },
+  stopButton: {
+    backgroundColor: '#FF3B30',
+  },
+  playbackButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  disconnectedNotice: {
+    backgroundColor: '#FFF3CD',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFC107',
+  },
+  disconnectedNoticeText: {
+    color: '#856404',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  cardButtonDisabled: {
+    backgroundColor: '#F5F5F5',
+    opacity: 0.6,
+    borderLeftColor: '#CCCCCC',
+  },
+  cardTitleDisabled: {
+    color: '#999999',
+  },
+  cardSubtitleDisabled: {
+    color: '#BBBBBB',
   },
 });
