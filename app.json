@@ -1,29 +1,76 @@
 {
   "expo": {
-    "name": "yoto_app_scheduler_js",
-    "slug": "yoto_app_scheduler_js",
+    "name": "Yoto MQTT Controller",
+    "slug": "yoto-mqtt-controller",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "com.gvalliappan.yotoscheduler",
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gvalliappan.yotoscheduler",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLName": "com.gvalliappan.yotoscheduler",
+            "CFBundleURLSchemes": [
+              "com.gvalliappan.yotoscheduler"
+            ]
+          }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.gvalliappan.yotoscheduler",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "com.gvalliappan.yotoscheduler"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-dev-client",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "f4de5acd-77d8-45d2-83ab-3262b7033ad9"
+      }
     }
   }
 }

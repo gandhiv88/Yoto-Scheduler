@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Yoto OAuth Callback</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .code-display {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            word-break: break-all;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        .copy-button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        .copy-button:hover {
+            background: #0056CC;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .loading {
+            color: #856404;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Yoto OAuth Callback</h2>
+        <div id="status" class="loading">Processing authorization...</div>
+        <div id="code-section" style="display: none;">
+            <p>Authorization code received! Copy this code and paste it into your Yoto app:</p>
+            <div id="auth-code" class="code-display"></div>
+            <button class="copy-button" onclick="copyCode()">Copy Code</button>
+            <button class="copy-button" onclick="tryDeepLink()">Open App</button>
+        </div>
+        <div id="error-section" style="display: none;">
+            <div class="error">
+                <h3>OAuth Error</h3>
+                <p id="error-message"></p>
+                <p>Please try logging in again from the app.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            try {
+                // Parse URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const authCode = urlParams.get('code');
+                const error = urlParams.get('error');
+                const errorDescription = urlParams.get('error_description');
+                
+                const statusEl = document.getElementById('status');
+                const codeSection = document.getElementById('code-section');
+                const errorSection = document.getElementById('error-section');
+                const authCodeEl = document.getElementById('auth-code');
+                const errorMessageEl = document.getElementById('error-message');
+                
+                if (error) {
+                    // Handle OAuth error
+                    statusEl.style.display = 'none';
+                    errorSection.style.display = 'block';
+                    errorMessageEl.textContent = errorDescription || error || 'Unknown OAuth error';
+                    console.error('OAuth Error:', error, errorDescription);
+                } else if (authCode) {
+                    // Handle successful authorization
+                    statusEl.style.display = 'none';
+                    codeSection.style.display = 'block';
+                    authCodeEl.textContent = authCode;
+                    
+                    console.log('Authorization code received:', authCode);
+                    
+                    // Store code in localStorage for potential retrieval
+                    localStorage.setItem('yoto_auth_code', authCode);
+                    localStorage.setItem('yoto_auth_timestamp', Date.now().toString());
+                    
+                    // For WebView usage, we don't need to deep link - the app will detect the URL change
+                    // Just show a success message
+                    statusEl.style.display = 'none';
+                    codeSection.style.display = 'block';
+                    
+                    // Show success message after a short delay
+                    setTimeout(() => {
+                        showTemporaryMessage('Login successful! Returning to app...');
+                    }, 500);
+                } else {
+                    // No code or error - something went wrong
+                    statusEl.style.display = 'none';
+                    errorSection.style.display = 'block';
+                    errorMessageEl.textContent = 'No authorization code received. Please try logging in again.';
+                }
+            } catch (e) {
+                console.error('Error processing OAuth callback:', e);
+                document.getElementById('status').style.display = 'none';
+                document.getElementById('error-section').style.display = 'block';
+                document.getElementById('error-message').textContent = 'Error processing callback: ' + e.message;
+            }
+        };
+        
+        function copyCode() {
+            const codeElement = document.getElementById('auth-code');
+            const code = codeElement.textContent;
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(code).then(() => {
+                    showTemporaryMessage('Code copied to clipboard!');
+                }).catch(err => {
+                    console.error('Failed to copy: ', err);
+                    fallbackCopyTextToClipboard(code);
+                });
+            } else {
+                fallbackCopyTextToClipboard(code);
+            }
+        }
+        
+        function fallbackCopyTextToClipboard(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showTemporaryMessage('Code copied to clipboard!');
+                } else {
+                    showTemporaryMessage('Failed to copy code. Please copy manually.');
+                }
+            } catch (err) {
+                console.error('Fallback copy failed: ', err);
+                showTemporaryMessage('Failed to copy code. Please copy manually.');
+            }
+            
+            document.body.removeChild(textArea);
+        }
+        
+        function tryDeepLink() {
+            const code = document.getElementById('auth-code').textContent;
+            if (code) {
+                // For Expo development builds, use the development scheme
+                const devDeepLink = `exp+yoto-mqtt-controller://expo-development-client/?url=${encodeURIComponent(`http://192.168.1.93:8081/--/oauth2redirect?code=${encodeURIComponent(code)}`)}`;
+                
+                // Alternative direct Expo scheme
+                const altDeepLink = `exp://192.168.1.93:8081/--/oauth2redirect?code=${encodeURIComponent(code)}`;
+                
+                // For native app builds (when not in development)
+                const nativeDeepLink = `com.gvalliappan.yotoscheduler://oauth2redirect?code=${encodeURIComponent(code)}`;
+                
+                console.log('Attempting dev deep link:', devDeepLink);
+                console.log('Attempting alternative deep link:', altDeepLink);
+                console.log('Attempting native deep link:', nativeDeepLink);
+                
+                // Try development scheme first (for current setup)
+                const devLink = document.createElement('a');
+                devLink.href = devDeepLink;
+                devLink.style.display = 'none';
+                document.body.appendChild(devLink);
+                devLink.click();
+                document.body.removeChild(devLink);
+                
+                // Try alternative scheme
+                setTimeout(() => {
+                    const altLink = document.createElement('a');
+                    altLink.href = altDeepLink;
+                    altLink.style.display = 'none';
+                    document.body.appendChild(altLink);
+                    altLink.click();
+                    document.body.removeChild(altLink);
+                }, 1000);
+                
+                // Try native scheme as final fallback
+                setTimeout(() => {
+                    const nativeLink = document.createElement('a');
+                    nativeLink.href = nativeDeepLink;
+                    nativeLink.style.display = 'none';
+                    document.body.appendChild(nativeLink);
+                    nativeLink.click();
+                    document.body.removeChild(nativeLink);
+                }, 2000);
+                
+                showTemporaryMessage('Attempting to open app...');
+                
+                // Show instructions if deep link doesn't work
+                setTimeout(() => {
+                    showTemporaryMessage('If the app didn\'t open, copy the code above and paste it in the app using "Enter Authorization Code Manually".');
+                }, 5000);
+            }
+        }
+        
+        function showTemporaryMessage(message) {
+            const existingMessage = document.getElementById('temp-message');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.id = 'temp-message';
+            messageDiv.className = 'success';
+            messageDiv.textContent = message;
+            
+            const container = document.querySelector('.container');
+            container.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 3000);
+        }
+        
+        // Debug information
+        console.log('Current URL:', window.location.href);
+        console.log('URL Search Params:', window.location.search);
+        console.log('URL Hash:', window.location.hash);
+    </script>
+</body>
+</html>
