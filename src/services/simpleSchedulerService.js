@@ -48,7 +48,7 @@ export class SchedulerService {
     // Check every 30 seconds when app is active
     this.schedulerInterval = setInterval(async () => {
       try {
-        await this.checkAndExecuteSchedules();
+        await this.checkAndExecuteSchedules(this.mqttClient);
       } catch (error) {
         console.error('❌ [SCHEDULER] Error in foreground scheduler:', error);
       }
@@ -137,10 +137,16 @@ export class SchedulerService {
         throw new Error('Schedule not found');
       }
       
+      console.log('📝 [SCHEDULER] Updating schedule:', {
+        scheduleId,
+        oldSchedule: schedules[index],
+        updates
+      });
+      
       schedules[index] = { ...schedules[index], ...updates };
       await this.saveSchedules(schedules);
       
-      console.log('✅ [SCHEDULER] Schedule updated:', scheduleId);
+      console.log('✅ [SCHEDULER] Schedule updated:', schedules[index]);
       return schedules[index];
     } catch (error) {
       console.error('❌ [SCHEDULER] Failed to update schedule:', error);
@@ -168,16 +174,26 @@ export class SchedulerService {
       const schedules = await this.getAllSchedules();
       const now = new Date();
       
-      if (schedules.length > 0) {
-        console.log(`⏰ [SCHEDULER] Checking ${schedules.length} schedules at ${now.toLocaleTimeString()}`);
-      }
+      console.log(`⏰ [SCHEDULER] Checking ${schedules.length} schedules at ${now.toLocaleTimeString()}`);
+      console.log(`🔌 [SCHEDULER] MQTT Client status:`, {
+        clientProvided: !!mqttClient,
+        clientFromService: !!this.mqttClient,
+        clientToUse: !!(mqttClient || this.mqttClient),
+        clientConnected: mqttClient?.isConnectionHealthy?.() || this.mqttClient?.isConnectionHealthy?.()
+      });
+      
+      // Use the provided client or fall back to the stored one
+      const clientToUse = mqttClient || this.mqttClient;
       
       for (const schedule of schedules) {
-        if (!schedule.isEnabled) continue;
+        if (!schedule.isEnabled) {
+          console.log(`⏭️ [SCHEDULER] Skipping disabled schedule: ${schedule.cardTitle}`);
+          continue;
+        }
         
         if (this.isScheduleDue(schedule, now)) {
           console.log('🔔 [SCHEDULER] Schedule is due:', schedule.cardTitle);
-          await this.executeSchedule(schedule, mqttClient);
+          await this.executeSchedule(schedule, clientToUse);
         }
       }
     } catch (error) {
@@ -222,28 +238,47 @@ export class SchedulerService {
   static async executeSchedule(schedule, mqttClient) {
     try {
       console.log('🎵 [SCHEDULER] Executing schedule:', schedule.cardTitle);
+      console.log('🔍 [SCHEDULER] Schedule details:', {
+        cardId: schedule.cardId,
+        cardUri: schedule.cardUri,
+        playerId: schedule.playerId,
+        playerName: schedule.playerName
+      });
       
       // Update last triggered time
       await this.updateSchedule(schedule.id, { lastTriggered: new Date() });
       
-      if (mqttClient && mqttClient.isConnectionHealthy()) {
-        // Device is online, play the card
-        console.log('📱 [SCHEDULER] Device online, playing card...');
+      if (mqttClient) {
+        console.log('🔌 [SCHEDULER] MQTT Client check:', {
+          clientExists: !!mqttClient,
+          hasHealthMethod: typeof mqttClient.isConnectionHealthy === 'function',
+          isHealthy: mqttClient.isConnectionHealthy ? mqttClient.isConnectionHealthy() : 'unknown',
+          clientType: typeof mqttClient
+        });
         
-        try {
-          await mqttClient.playCard(schedule.playerId, schedule.cardUri);
+        if (mqttClient.isConnectionHealthy()) {
+          // Device is online, play the card
+          console.log('📱 [SCHEDULER] Device online, playing card...');
           
-          // Log success
-          console.log(`✅ [SCHEDULER] Card "${schedule.cardTitle}" played successfully on ${schedule.playerName}`);
-          
-        } catch (error) {
-          console.error('❌ [SCHEDULER] Failed to play card:', error);
-          console.log(`❌ [SCHEDULER] Could not play "${schedule.cardTitle}" on ${schedule.playerName}: ${error.message}`);
+          try {
+            await mqttClient.playCard(schedule.playerId, schedule.cardUri);
+            
+            // Log success
+            console.log(`✅ [SCHEDULER] Card "${schedule.cardTitle}" played successfully on ${schedule.playerName}`);
+            
+          } catch (error) {
+            console.error('❌ [SCHEDULER] Failed to play card:', error);
+            console.log(`❌ [SCHEDULER] Could not play "${schedule.cardTitle}" on ${schedule.playerName}: ${error.message}`);
+          }
+        } else {
+          // Device connection is not healthy
+          console.log('📴 [SCHEDULER] Device connection not healthy');
+          console.log(`📴 [SCHEDULER] Could not play "${schedule.cardTitle}" because connection to ${schedule.playerName} is not healthy`);
         }
       } else {
-        // Device is offline
-        console.log('📴 [SCHEDULER] Device offline');
-        console.log(`📴 [SCHEDULER] Could not play "${schedule.cardTitle}" because ${schedule.playerName} is offline`);
+        // No MQTT client provided
+        console.log('❌ [SCHEDULER] No MQTT client provided');
+        console.log(`❌ [SCHEDULER] Could not play "${schedule.cardTitle}" because no MQTT client is available`);
       }
     } catch (error) {
       console.error('❌ [SCHEDULER] Failed to execute schedule:', error);

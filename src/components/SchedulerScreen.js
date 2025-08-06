@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,8 @@ import {
   Alert,
   Modal,
   FlatList,
-  Switch
+  Switch,
+  Platform
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SchedulerService } from '../services/simpleSchedulerService';
@@ -28,6 +29,10 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [loading, setLoading] = useState(false);
   
+  // Edit mode state
+  const [editingSchedule, setEditingSchedule] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  
   // Create schedule form state
   const [selectedCard, setSelectedCard] = useState(null);
   const [selectedTime, setSelectedTime] = useState(new Date());
@@ -37,9 +42,37 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
 
+  // Handler functions with useCallback for performance and debugging
+  const handleCardPickerOpen = useCallback(() => {
+    console.log('📋 [CARD] Opening card picker - button pressed');
+    setShowCardPicker(true);
+  }, []);
+
+  const handleCardPickerClose = useCallback(() => {
+    console.log('📋 [CARD] Closing card picker');
+    setShowCardPicker(false);
+  }, []);
+
+  const handleTimePickerOpen = useCallback(() => {
+    console.log('⏰ [TIME] Opening time picker - button pressed');
+    setShowTimePicker(true);
+  }, []);
+
+  const handleTimePickerChange = useCallback((event, time) => {
+    console.log('⏰ [TIME] Time picker event:', { type: event?.type, time });
+    setShowTimePicker(false);
+    if (event?.type === 'set' && time) {
+      setSelectedTime(time);
+    }
+  }, []);
+
   useEffect(() => {
     loadSchedules();
     SchedulerService.initialize().catch(console.error);
+  }, [player.id]); // Only re-run when player changes
+
+  useEffect(() => {
+    if (!mqttClient) return;
     
     // Start checking schedules every minute
     const interval = setInterval(() => {
@@ -47,7 +80,7 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
     }, 60000);
     
     return () => clearInterval(interval);
-  }, [mqttClient]);
+  }, [mqttClient]); // Only re-run when mqttClient changes
 
   const loadSchedules = async () => {
     try {
@@ -63,6 +96,12 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
   };
 
   const handleCreateSchedule = async () => {
+    // For edit mode, use the update function
+    if (isEditMode) {
+      await handleUpdateSchedule();
+      return;
+    }
+
     if (!selectedCard || selectedDays.length === 0) {
       Alert.alert('Validation Error', 'Please select a card and at least one day');
       return;
@@ -130,12 +169,96 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
     }
   };
 
+  // Test a specific schedule
+  const testScheduleNow = async (schedule) => {
+    console.log('🧪 [TEST] Testing schedule immediately:', schedule.cardTitle);
+    Alert.alert('Testing Schedule', `Testing "${schedule.cardTitle}" now...`);
+    
+    try {
+      // Import executeSchedule method temporarily to test
+      await SchedulerService.executeSchedule(schedule, mqttClient);
+      Alert.alert('Test Complete', `Attempted to play "${schedule.cardTitle}". Check logs for results.`);
+    } catch (error) {
+      console.error('❌ [TEST] Schedule test failed:', error);
+      Alert.alert('Test Failed', error.message);
+    }
+  };
+
   const resetForm = () => {
     setSelectedCard(null);
     setSelectedTime(new Date());
     setSelectedDays([]);
     setNotifyIfOffline(true);
     setRepeatWeekly(true);
+    setIsEditMode(false);
+    setEditingSchedule(null);
+  };
+
+  // Edit schedule functions
+  const handleEditSchedule = (schedule) => {
+    console.log('✏️ [EDIT] Starting edit for schedule:', schedule.cardTitle);
+    
+    // Pre-fill form with existing schedule data
+    setSelectedCard({
+      id: schedule.cardId,
+      title: schedule.cardTitle,
+      uri: schedule.cardUri
+    });
+    setSelectedTime(new Date(schedule.scheduledTime));
+    setSelectedDays(schedule.daysOfWeek);
+    setRepeatWeekly(schedule.repeatWeekly);
+    setNotifyIfOffline(schedule.notifyIfOffline);
+    
+    // Set edit mode
+    setIsEditMode(true);
+    setEditingSchedule(schedule);
+    setShowCreateModal(true);
+  };
+
+  const handleUpdateSchedule = async () => {
+    if (selectedDays.length === 0) {
+      Alert.alert('Validation Error', 'Please select at least one day');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      console.log('📝 [EDIT] Updating schedule:', {
+        scheduleId: editingSchedule.id,
+        originalTime: editingSchedule.scheduledTime,
+        newTime: selectedTime,
+        originalDays: editingSchedule.daysOfWeek,
+        newDays: selectedDays
+      });
+      
+      const updates = {
+        scheduledTime: selectedTime,
+        daysOfWeek: selectedDays,
+        repeatWeekly,
+        notifyIfOffline,
+        lastTriggered: null // Reset trigger status so it can execute again
+      };
+
+      await SchedulerService.updateSchedule(editingSchedule.id, updates);
+      
+      console.log('✅ [EDIT] Schedule updated successfully');
+      Alert.alert('Success', 'Schedule updated successfully!');
+      setShowCreateModal(false);
+      resetForm();
+      await loadSchedules();
+    } catch (error) {
+      console.error('Failed to update schedule:', error);
+      Alert.alert('Error', 'Failed to update schedule');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Modal close handler
+  const handleModalClose = () => {
+    setShowCreateModal(false);
+    resetForm();
   };
 
   const toggleDay = (dayId) => {
@@ -154,13 +277,71 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
     setSelectedDays([0, 1, 2, 3, 4, 5, 6]); // All days
   };
 
+  // Filter out schedules that have passed for today and won't repeat
+  const getActiveSchedules = () => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    return schedules.filter(schedule => {
+      // Always show disabled schedules (user can enable them)
+      if (!schedule.isEnabled) return true;
+      
+      // Always show weekly repeating schedules
+      if (schedule.repeatWeekly) return true;
+      
+      // For one-time schedules, check if they've already passed today
+      const scheduledTime = new Date(schedule.scheduledTime);
+      const scheduledHour = scheduledTime.getHours();
+      const scheduledMinute = scheduledTime.getMinutes();
+      
+      // If today is not a scheduled day, show it (it will run on the next scheduled day)
+      if (!schedule.daysOfWeek.includes(currentDay)) return true;
+      
+      // If today is a scheduled day, check if the time has passed
+      const hasTimePassed = 
+        currentHour > scheduledHour || 
+        (currentHour === scheduledHour && currentMinute > scheduledMinute + 1);
+      
+      // If the schedule was already triggered today and it's not repeating, hide it
+      if (hasTimePassed && schedule.lastTriggered) {
+        const lastTriggered = new Date(schedule.lastTriggered);
+        const isTriggeredToday = 
+          lastTriggered.getDate() === now.getDate() &&
+          lastTriggered.getMonth() === now.getMonth() &&
+          lastTriggered.getFullYear() === now.getFullYear();
+        
+        if (isTriggeredToday) return false;
+      }
+      
+      return true;
+    });
+  };
+
   const renderScheduleItem = ({ item }) => {
     const nextExecution = SchedulerService.getNextExecutionTime(item);
     
+    // Check if this schedule was completed today
+    const now = new Date();
+    const isCompletedToday = item.lastTriggered && 
+      new Date(item.lastTriggered).toDateString() === now.toDateString();
+    
     return (
-      <View style={[styles.scheduleItem, !item.isEnabled && styles.disabledSchedule]}>
+      <View style={[
+        styles.scheduleItem, 
+        !item.isEnabled && styles.disabledSchedule,
+        isCompletedToday && styles.completedSchedule
+      ]}>
         <View style={styles.scheduleHeader}>
-          <Text style={styles.cardTitle}>{item.cardTitle}</Text>
+          <View style={styles.cardTitleContainer}>
+            <Text style={styles.cardTitle}>
+              {isCompletedToday ? '✅ ' : ''}{item.cardTitle}
+            </Text>
+            {isCompletedToday && (
+              <Text style={styles.completedText}>Played today</Text>
+            )}
+          </View>
           <Switch
             value={item.isEnabled}
             onValueChange={() => handleToggleSchedule(item.id, item.isEnabled)}
@@ -201,30 +382,50 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
           </View>
         </View>
         
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => handleDeleteSchedule(item.id)}
-        >
-          <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
-        </TouchableOpacity>
+        <View style={styles.scheduleActions}>
+          <TouchableOpacity
+            style={styles.testButton}
+            onPress={() => testScheduleNow(item)}
+          >
+            <Text style={styles.testButtonText}>🧪 Test</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => handleEditSchedule(item)}
+          >
+            <Text style={styles.editButtonText}>✏️ Edit</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteSchedule(item.id)}
+          >
+            <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
 
-  const renderCardItem = ({ item }) => (
+  const renderCardItem = useCallback(({ item }) => (
     <TouchableOpacity
+      key={item.id}
       style={[
         styles.cardPickerItem,
         selectedCard?.id === item.id && styles.selectedCardItem
       ]}
       onPress={() => {
+        console.log('📋 [CARD] Selected card:', item.title);
         setSelectedCard(item);
-        setShowCardPicker(false);
+        handleCardPickerClose();
       }}
+      activeOpacity={0.7}
     >
       <Text style={styles.cardPickerTitle}>{item.title}</Text>
+      <Text style={styles.cardPickerSubtitle}>Tap to select</Text>
     </TouchableOpacity>
-  );
+  ), [selectedCard?.id]);
 
   return (
     <View style={styles.container}>
@@ -260,12 +461,23 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
             </Text>
           </View>
         ) : (
-          <FlatList
-            data={schedules}
-            keyExtractor={(item) => item.id}
-            renderItem={renderScheduleItem}
-            scrollEnabled={false}
-          />
+          <>
+            {getActiveSchedules().length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No active schedules</Text>
+                <Text style={styles.emptyStateSubtext}>
+                  All schedules for today have completed. Create new ones or wait for weekly schedules to repeat.
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={getActiveSchedules()}
+                keyExtractor={(item) => item.id}
+                renderItem={renderScheduleItem}
+                scrollEnabled={false}
+              />
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -273,40 +485,55 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
       <Modal
         visible={showCreateModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        transparent={false}
+        onRequestClose={handleModalClose}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+            <TouchableOpacity onPress={handleModalClose}>
               <Text style={styles.modalCancel}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>New Schedule</Text>
+            <Text style={styles.modalTitle}>{isEditMode ? 'Edit Schedule' : 'New Schedule'}</Text>
             <TouchableOpacity onPress={handleCreateSchedule} disabled={loading}>
-              <Text style={styles.modalSave}>Save</Text>
+              <Text style={styles.modalSave}>{isEditMode ? 'Update' : 'Save'}</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
-            {/* Card Selection */}
-            <View style={styles.formSection}>
-              <Text style={styles.sectionTitle}>Select Card</Text>
-              <TouchableOpacity
-                style={styles.cardSelector}
-                onPress={() => setShowCardPicker(true)}
-              >
-                <Text style={styles.cardSelectorText}>
-                  {selectedCard ? selectedCard.title : 'Choose a card...'}
-                </Text>
-                <Text style={styles.cardSelectorIcon}>▼</Text>
-              </TouchableOpacity>
-            </View>
+            {/* Card Selection - Only show in create mode */}
+            {!isEditMode && (
+              <View style={styles.formSection}>
+                <Text style={styles.sectionTitle}>Select Card</Text>
+                <TouchableOpacity
+                  style={styles.cardSelector}
+                  onPress={handleCardPickerOpen}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.cardSelectorText}>
+                    {selectedCard ? selectedCard.title : 'Choose a card...'}
+                  </Text>
+                  <Text style={styles.cardSelectorIcon}>▼</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Card Display - Show in edit mode */}
+            {isEditMode && selectedCard && (
+              <View style={styles.formSection}>
+                <Text style={styles.sectionTitle}>Card (cannot be changed)</Text>
+                <View style={styles.cardDisplay}>
+                  <Text style={styles.cardDisplayText}>{selectedCard.title}</Text>
+                </View>
+              </View>
+            )}
 
             {/* Time Selection */}
             <View style={styles.formSection}>
               <Text style={styles.sectionTitle}>Time</Text>
               <TouchableOpacity
                 style={styles.timeSelector}
-                onPress={() => setShowTimePicker(true)}
+                onPress={handleTimePickerOpen}
+                activeOpacity={0.7}
               >
                 <Text style={styles.timeSelectorText}>
                   {SchedulerService.formatTime(selectedTime)}
@@ -369,43 +596,167 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
               </View>
             </View>
           </ScrollView>
+          
+          {/* Card Picker Overlay inside the modal */}
+          {showCardPicker && (
+            <View style={styles.cardPickerOverlay}>
+              <TouchableOpacity 
+                style={styles.cardPickerBackdrop}
+                activeOpacity={1}
+                onPress={handleCardPickerClose}
+              />
+              <View style={styles.cardPickerContainer}>
+                <View style={styles.modalHeader}>
+                  <TouchableOpacity onPress={handleCardPickerClose}>
+                    <Text style={styles.modalCancel}>Cancel</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.modalTitle}>Select Card</Text>
+                  <View style={styles.modalPlaceholder} />
+                </View>
+                {cards && cards.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>No cards available</Text>
+                    <Text style={styles.emptyStateSubtext}>Please load some cards first</Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={cards || []}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderCardItem}
+                    style={styles.cardPickerList}
+                    contentContainerStyle={styles.cardPickerContent}
+                    removeClippedSubviews={true}
+                    maxToRenderPerBatch={10}
+                    windowSize={10}
+                  />
+                )}
+              </View>
+            </View>
+          )}
+          
+          {/* Time Picker inside the modal */}
+          {showTimePicker && (
+            <View style={styles.timePickerContainer}>
+              <Text style={styles.timePickerTitle}>Select Time</Text>
+              <View style={styles.timePickerRow}>
+                <View style={styles.timePickerGroup}>
+                  <Text style={styles.timeLabel}>Hour</Text>
+                  <ScrollView style={styles.timePicker} showsVerticalScrollIndicator={false}>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((hour) => (
+                      <TouchableOpacity
+                        key={hour}
+                        style={[
+                          styles.timeOption,
+                          selectedTime.getHours() % 12 === hour % 12 && selectedTime.getHours() !== 0 
+                            ? styles.selectedTimeOption : {}
+                        ]}
+                        onPress={() => {
+                          const newTime = new Date(selectedTime);
+                          const currentHour = selectedTime.getHours();
+                          const isPM = currentHour >= 12;
+                          newTime.setHours(isPM ? hour + 12 : hour);
+                          setSelectedTime(newTime);
+                        }}
+                      >
+                        <Text style={[
+                          styles.timeOptionText,
+                          selectedTime.getHours() % 12 === hour % 12 && selectedTime.getHours() !== 0
+                            ? styles.selectedTimeOptionText : {}
+                        ]}>
+                          {hour}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+                
+                <View style={styles.timePickerGroup}>
+                  <Text style={styles.timeLabel}>Minute</Text>
+                  <ScrollView style={styles.timePicker} showsVerticalScrollIndicator={false}>
+                    {Array.from({ length: 60 }, (_, i) => i).map((minute) => (
+                      <TouchableOpacity
+                        key={minute}
+                        style={[
+                          styles.timeOption,
+                          selectedTime.getMinutes() === minute ? styles.selectedTimeOption : {}
+                        ]}
+                        onPress={() => {
+                          const newTime = new Date(selectedTime);
+                          newTime.setMinutes(minute);
+                          setSelectedTime(newTime);
+                        }}
+                      >
+                        <Text style={[
+                          styles.timeOptionText,
+                          selectedTime.getMinutes() === minute ? styles.selectedTimeOptionText : {}
+                        ]}>
+                          {minute.toString().padStart(2, '0')}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+                
+                <View style={styles.timePickerGroup}>
+                  <Text style={styles.timeLabel}>AM/PM</Text>
+                  <ScrollView style={styles.timePicker} showsVerticalScrollIndicator={false}>
+                    {['AM', 'PM'].map((period) => (
+                      <TouchableOpacity
+                        key={period}
+                        style={[
+                          styles.timeOption,
+                          (selectedTime.getHours() >= 12 ? 'PM' : 'AM') === period 
+                            ? styles.selectedTimeOption : {}
+                        ]}
+                        onPress={() => {
+                          const newTime = new Date(selectedTime);
+                          const currentHour = selectedTime.getHours();
+                          if (period === 'AM' && currentHour >= 12) {
+                            newTime.setHours(currentHour - 12);
+                          } else if (period === 'PM' && currentHour < 12) {
+                            newTime.setHours(currentHour + 12);
+                          }
+                          setSelectedTime(newTime);
+                        }}
+                      >
+                        <Text style={[
+                          styles.timeOptionText,
+                          (selectedTime.getHours() >= 12 ? 'PM' : 'AM') === period
+                            ? styles.selectedTimeOptionText : {}
+                        ]}>
+                          {period}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+              
+              <View style={styles.timePickerButtons}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    console.log('⏰ [TIME] Time picker cancelled');
+                    setShowTimePicker(false);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.confirmButton}
+                  onPress={() => {
+                    console.log('⏰ [TIME] Time selected:', selectedTime.toLocaleTimeString());
+                    setShowTimePicker(false);
+                  }}
+                >
+                  <Text style={styles.confirmButtonText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
       </Modal>
 
-      {/* Time Picker */}
-      {showTimePicker && (
-        <DateTimePicker
-          value={selectedTime}
-          mode="time"
-          is24Hour={false}
-          onChange={(event, time) => {
-            setShowTimePicker(false);
-            if (time) setSelectedTime(time);
-          }}
-        />
-      )}
-
-      {/* Card Picker Modal */}
-      <Modal
-        visible={showCardPicker}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <View style={styles.cardPickerContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowCardPicker(false)}>
-              <Text style={styles.modalCancel}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Select Card</Text>
-            <View />
-          </View>
-          <FlatList
-            data={cards}
-            keyExtractor={(item) => item.id}
-            renderItem={renderCardItem}
-          />
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -504,20 +855,34 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  completedSchedule: {
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
   disabledSchedule: {
     opacity: 0.6,
   },
   scheduleHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 10,
+  },
+  cardTitleContainer: {
+    flex: 1,
+    marginRight: 12,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    flex: 1,
+  },
+  completedText: {
+    fontSize: 12,
+    color: '#34C759',
+    fontWeight: '500',
+    marginTop: 4,
   },
   scheduleDetails: {
     marginBottom: 10,
@@ -536,12 +901,41 @@ const styles = StyleSheet.create({
     color: '#333',
     flex: 1,
   },
+  scheduleActions: {
+    flexDirection: 'row',
+    marginTop: 15,
+    gap: 8,
+  },
+  testButton: {
+    backgroundColor: '#FF9500',
+    padding: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    flex: 1,
+  },
+  testButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  editButton: {
+    backgroundColor: '#007AFF',
+    padding: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    flex: 1,
+  },
+  editButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+  },
   deleteButton: {
     backgroundColor: '#FF3B30',
     padding: 8,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 5,
+    flex: 1,
   },
   deleteButtonText: {
     color: '#FFFFFF',
@@ -576,6 +970,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  modalPlaceholder: {
+    width: 50, // Same width as cancel/save buttons for balance
+  },
   modalContent: {
     flex: 1,
     padding: 20,
@@ -606,6 +1003,18 @@ const styles = StyleSheet.create({
   cardSelectorIcon: {
     fontSize: 16,
     color: '#666',
+  },
+  cardDisplay: {
+    backgroundColor: '#F8F9FA',
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  cardDisplayText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
   },
   timeSelector: {
     backgroundColor: '#FFFFFF',
@@ -677,21 +1086,153 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
-  cardPickerContainer: {
+  cardPickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+    zIndex: 1000,
+  },
+  cardPickerBackdrop: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+  },
+  cardPickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%', // Limit height to 70% of screen
+    paddingBottom: 40, // Add padding for safe area
+  },
+  cardPickerList: {
+    maxHeight: 400, // Limit the list height
+  },
+  cardPickerContent: {
+    paddingBottom: 20,
   },
   cardPickerItem: {
     backgroundColor: '#FFFFFF',
-    padding: 15,
+    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
+    minHeight: 70,
+    justifyContent: 'center',
   },
   selectedCardItem: {
     backgroundColor: '#E3F2FD',
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
   },
   cardPickerTitle: {
     fontSize: 16,
+    fontWeight: '600',
     color: '#333',
+    marginBottom: 4,
+  },
+  cardPickerSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  timePickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 20,
+    marginHorizontal: 20,
+    marginVertical: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  timePickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  timePickerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    height: 150,
+    marginBottom: 20,
+  },
+  timePickerGroup: {
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  timeLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  timePicker: {
+    height: 120,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+  },
+  timeOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+  },
+  selectedTimeOption: {
+    backgroundColor: '#007AFF',
+  },
+  timeOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  selectedTimeOptionText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  dateTimePicker: {
+    height: 200,
+    backgroundColor: '#FFFFFF',
+  },
+  timePickerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  cancelButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+    flex: 1,
+    marginRight: 10,
+    alignItems: 'center',
+  },
+  confirmButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#007AFF',
+    flex: 1,
+    marginLeft: 10,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  confirmButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
