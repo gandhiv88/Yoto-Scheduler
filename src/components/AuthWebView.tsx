@@ -1,7 +1,8 @@
 import React, { useRef } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { YotoAuth } from '../services/authService';
+import { useSnackBarContext } from '../contexts/SnackBarContext';
 
 interface AuthWebViewProps {
   onSuccess: (code: string) => void;
@@ -10,6 +11,7 @@ interface AuthWebViewProps {
 
 export const AuthWebView: React.FC<AuthWebViewProps> = ({ onSuccess, onCancel }) => {
   const webViewRef = useRef<WebView>(null);
+  const { showSuccess, showError, showWarning, showInfo } = useSnackBarContext();
 
   const handleNavigationStateChange = (navState: any) => {
     console.log('🌐 [WebView] Navigation to:', navState.url);
@@ -23,7 +25,7 @@ export const AuthWebView: React.FC<AuthWebViewProps> = ({ onSuccess, onCancel })
         
         if (error) {
           console.error('❌ [WebView] OAuth error:', error);
-          Alert.alert('Authentication Error', `OAuth error: ${error}`);
+          showError(`OAuth error: ${error}`);
           onCancel();
           return false; // Prevent navigation
         }
@@ -43,7 +45,7 @@ export const AuthWebView: React.FC<AuthWebViewProps> = ({ onSuccess, onCancel })
 
   const handleError = (errorEvent: any) => {
     console.error('🚨 [WebView] WebView error:', errorEvent.nativeEvent);
-    Alert.alert('WebView Error', 'Failed to load authentication page');
+    showError('Failed to load authentication page');
     onCancel();
   };
 

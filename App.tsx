@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ScrollView,
   ActivityIndicator,
   SafeAreaView,
@@ -20,11 +19,13 @@ import { SchedulerService } from './src/services/simpleSchedulerService';
 import { AmbientLightControl } from './src/components/AmbientLightControl';
 import { SchedulerScreen } from './src/components/SchedulerScreen';
 import { BatteryStatus } from './src/components/BatteryStatus';
+import { SnackBarProvider, useSnackBarContext } from './src/contexts/SnackBarContext';
 import type { YotoPlayer, YotoCard } from './src/types/index';
 
 const CLIENT_ID = 'NJ4lW4Y3FrBcpR4R6YlkKs30gTxPjvC4';
 
-export default function App() {
+// Internal App component that uses the SnackBar context
+const AppContent: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showWebViewLogin, setShowWebViewLogin] = useState(false);
@@ -37,8 +38,10 @@ export default function App() {
   const [showScheduler, setShowScheduler] = useState(false);
   const [processedCallbackUrl, setProcessedCallbackUrl] = useState<string | null>(null);
   const [batteryInfo, setBatteryInfo] = useState<any>(null);
-
   const [authUrl, setAuthUrl] = useState<string>('');
+
+  // Use snackbar context
+  const { showSuccess, showError, showWarning, showInfo } = useSnackBarContext();
 
   useEffect(() => {
     console.log('App component mounted, checking authentication status...');
@@ -134,7 +137,7 @@ export default function App() {
       setShowWebViewLogin(true);
     } catch (error) {
       console.error('Failed to get auth URL:', error);
-      Alert.alert('Error', 'Failed to start login process');
+      showError('Failed to start login process');
     }
   };
 
@@ -169,7 +172,7 @@ export default function App() {
     try {
       const token = await YotoAuth.getCurrentToken();
       if (!token) {
-        Alert.alert('Error', 'Authentication failed. Please log in again.');
+        showError('Authentication failed. Please log in again.');
         await handleLogout();
         return;
       }
@@ -195,13 +198,13 @@ export default function App() {
         // Pass MQTT client to scheduler service for foreground execution
         SchedulerService.setMqttClient(client);
         
-        Alert.alert('Success', `Connected to ${player.name}`);
+        showSuccess(`Connected to ${player.name}`);
       } else {
-        Alert.alert('Failed', 'Could not connect to player');
+        showError('Could not connect to player');
       }
     } catch (error) {
       console.error('Connection error:', error);
-      Alert.alert('Error', 'Failed to connect to player');
+      showError('Failed to connect to player');
     } finally {
       setLoading(false);
     }
@@ -209,7 +212,7 @@ export default function App() {
 
   const playCard = async (card: YotoCard) => {
     if (!mqttClient || !selectedPlayer) {
-      Alert.alert('Error', 'No player connected');
+      showError('No player connected');
       return;
     }
 
@@ -235,10 +238,10 @@ export default function App() {
 
     try {
       await mqttClient.playCard(selectedPlayer.id, cardUri);
-      Alert.alert('Success', `Playing ${card.title}`);
+      showSuccess(`Playing ${card.title}`);
     } catch (error) {
       console.error('Play error:', error);
-      Alert.alert('Error', 'Failed to play card');
+      showError('Failed to play card');
     }
   };
 
@@ -264,9 +267,9 @@ export default function App() {
       setSelectedPlayer(null);
       setConnectionStatus('Disconnected');
       setBatteryInfo(null);
-      Alert.alert('Disconnected', 'Successfully disconnected from player');
+      showSuccess('Successfully disconnected from player');
     } else {
-      Alert.alert('Info', 'No active connection to disconnect');
+      showInfo('No active connection to disconnect');
     }
   };
 
@@ -319,12 +322,12 @@ export default function App() {
                   } else {
                     console.error('❌ [AUTH] Token exchange failed:', callbackResult.error);
                     setShowWebViewLogin(false);
-                    Alert.alert('Login Failed', callbackResult.error || 'Failed to complete login');
+                    showError(callbackResult.error || 'Failed to complete login');
                   }
                 } catch (error) {
                   console.error('❌ [AUTH] Error processing callback:', error);
                   setShowWebViewLogin(false);
-                  Alert.alert('Login Error', 'Failed to process login callback');
+                  showError('Failed to process login callback');
                 }
                 
                 console.log('🏁 [DEBUG] Navigation handler completed');
@@ -345,8 +348,8 @@ export default function App() {
       <View style={styles.container}>
         <StatusBar style="auto" />
         <View style={styles.loginContainer}>
-          <Text style={styles.title}>Yoto MQTT Controller</Text>
-          <Text style={styles.subtitle}>Control your Yoto players via MQTT</Text>
+          <Text style={styles.title}>Yoto Scheduler</Text>
+          <Text style={styles.subtitle}>Control your Yoto players</Text>
           <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
             <Text style={styles.loginButtonText}>Login with Yoto</Text>
           </TouchableOpacity>
@@ -390,10 +393,22 @@ export default function App() {
 
         {/* Connection Status */}
         <View style={styles.statusContainer}>
-          <Text style={styles.statusText}>MQTT Connection: {connectionStatus}</Text>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusText}>MQTT Connection: {connectionStatus}</Text>
+            {/* Battery status inline with connection status */}
+            {(batteryInfo || selectedPlayer) && (
+              <BatteryStatus batteryInfo={batteryInfo || { level: 50, isCharging: false }} />
+            )}
+          </View>
+          
           {selectedPlayer && (
             <>
               <Text style={styles.playerText}>Connected to: {selectedPlayer.name}</Text>
+              {!batteryInfo && (
+                <Text style={styles.waitingText}>
+                  Waiting for device...
+                </Text>
+              )}
               <View style={styles.connectionButtonsContainer}>
                 <TouchableOpacity style={styles.disconnectButton} onPress={disconnectFromPlayer}>
                   <Text style={styles.disconnectButtonText}>Disconnect</Text>
@@ -405,19 +420,6 @@ export default function App() {
             </>
           )}
         </View>
-
-        {/* Battery Status */}
-        {(batteryInfo || selectedPlayer) && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Battery Status</Text>
-            <BatteryStatus batteryInfo={batteryInfo || { level: 50, isCharging: false }} />
-            {!batteryInfo && (
-              <Text style={styles.playerText}>
-                Waiting for battery data from MQTT...
-              </Text>
-            )}
-          </View>
-        )}
 
         {/* Players Section */}
         <View style={styles.section}>
@@ -529,6 +531,15 @@ export default function App() {
       </ScrollView>
     </SafeAreaView>
   );
+};
+
+// Main App component wrapped with SnackBarProvider
+export default function App() {
+  return (
+    <SnackBarProvider>
+      <AppContent />
+    </SnackBarProvider>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -613,10 +624,23 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   statusText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+    flex: 1,
+  },
+  waitingText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 2,
   },
   playerText: {
     fontSize: 14,

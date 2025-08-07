@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, StyleSheet, Alert, Text, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { YotoAuth } from '../services/authService.js';
 

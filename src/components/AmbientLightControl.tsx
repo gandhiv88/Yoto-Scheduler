@@ -4,10 +4,10 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Switch,
   ScrollView,
 } from 'react-native';
+import { useSnackBarContext } from '../contexts/SnackBarContext';
 import type { YotoPlayer } from '../types/index';
 
 interface MqttClient {
@@ -36,6 +36,9 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
   const [isNightLightEnabled, setIsNightLightEnabled] = useState<boolean>(false);
   const [nightLightBrightness, setNightLightBrightness] = useState<number>(20);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // Use snackbar context
+  const { showSuccess, showError, showWarning } = useSnackBarContext();
 
   const predefinedColors = [
     { name: 'White', color: '#FFFFFF' },
@@ -72,7 +75,8 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
 
       // Try the ambient light command
       await mqttClient.setAmbientLight(player.id, brightness, selectedColor);
-      Alert.alert('Success', `Ambient light set to ${brightness}% brightness with ${selectedColor} color`);
+      const colorName = predefinedColors.find(c => c.color === selectedColor)?.name || 'selected color';
+      showSuccess(`Ambient light set to ${brightness}% brightness with ${colorName}`);
     } catch (error) {
       console.error('💡 [AMBIENT] Error setting ambient light:', error);
       
@@ -81,47 +85,19 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
       const errorStr = error instanceof Error ? error.message : String(error);
       
       if (errorStr.includes('403') || errorStr.includes('Authentication failed')) {
-        // Show specific 403 error with retry option
-        Alert.alert(
-          'Authentication Error',
-          'The connection to your Yoto player has expired or is not authorized. Would you like to try reconnecting?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Reconnect', 
-              onPress: async () => {
-                if (onRefreshConnection) {
-                  setIsLoading(true);
-                  try {
-                    await onRefreshConnection();
-                    // If reconnection successful, try ambient light again
-                    setTimeout(() => {
-                      handleSetAmbientLight();
-                    }, 1000);
-                  } catch (reconnectError) {
-                    console.error('Reconnection failed:', reconnectError);
-                    Alert.alert('Reconnection Failed', 'Please try logging out and logging back in.');
-                  } finally {
-                    setIsLoading(false);
-                  }
-                } else {
-                  Alert.alert('Manual Reconnection Required', 'Please disconnect and reconnect to the player from the main screen.');
-                }
-              }
-            }
-          ]
-        );
+        // Show specific 403 error message
+        showError('Authentication expired. Please disconnect and reconnect to your Yoto player.');
       } else if (errorStr.includes('not connected')) {
         errorMessage = 'MQTT connection lost. Please reconnect to the player.';
-        Alert.alert('Connection Lost', errorMessage);
+        showError(errorMessage);
       } else if (errorStr.includes('not healthy')) {
         errorMessage = 'Connection is unstable. Please try reconnecting.';
-        Alert.alert('Connection Unstable', errorMessage);
+        showWarning(errorMessage);
       } else if (error instanceof Error && error.message) {
         errorMessage = error.message;
-        Alert.alert('Error', errorMessage);
+        showError(errorMessage);
       } else {
-        Alert.alert('Error', errorMessage);
+        showError(errorMessage);
       }
     } finally {
       setIsLoading(false);
@@ -132,36 +108,15 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
     setIsLoading(true);
     try {
       await mqttClient.turnOffAmbientLight(player.id);
-      Alert.alert('Success', 'Ambient light turned off');
+      showSuccess('Ambient light turned off');
     } catch (error) {
       console.error('Error turning off light:', error);
       const errorStr = error instanceof Error ? error.message : String(error);
       
       if (errorStr.includes('403') || errorStr.includes('Authentication failed')) {
-        Alert.alert(
-          'Authentication Error',
-          'The connection to your Yoto player has expired. Would you like to try reconnecting?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Reconnect', 
-              onPress: async () => {
-                if (onRefreshConnection) {
-                  try {
-                    await onRefreshConnection();
-                    setTimeout(() => handleTurnOffLight(), 1000);
-                  } catch (reconnectError) {
-                    Alert.alert('Reconnection Failed', 'Please try logging out and logging back in.');
-                  }
-                } else {
-                  Alert.alert('Manual Reconnection Required', 'Please disconnect and reconnect to the player from the main screen.');
-                }
-              }
-            }
-          ]
-        );
+        showError('Authentication expired. Please disconnect and reconnect to your Yoto player.');
       } else {
-        Alert.alert('Error', 'Failed to turn off light');
+        showError('Failed to turn off light');
       }
     } finally {
       setIsLoading(false);
@@ -173,39 +128,15 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
     try {
       await mqttClient.setNightLight(player.id, enabled, nightLightBrightness);
       setIsNightLightEnabled(enabled);
-      Alert.alert(
-        'Success',
-        enabled ? 'Night light enabled' : 'Night light disabled'
-      );
+      showSuccess(enabled ? 'Night light enabled' : 'Night light disabled');
     } catch (error) {
       console.error('Error toggling night light:', error);
       const errorStr = error instanceof Error ? error.message : String(error);
       
       if (errorStr.includes('403') || errorStr.includes('Authentication failed')) {
-        Alert.alert(
-          'Authentication Error',
-          'The connection to your Yoto player has expired. Would you like to try reconnecting?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Reconnect', 
-              onPress: async () => {
-                if (onRefreshConnection) {
-                  try {
-                    await onRefreshConnection();
-                    setTimeout(() => handleNightLightToggle(enabled), 1000);
-                  } catch (reconnectError) {
-                    Alert.alert('Reconnection Failed', 'Please try logging out and logging back in.');
-                  }
-                } else {
-                  Alert.alert('Manual Reconnection Required', 'Please disconnect and reconnect to the player from the main screen.');
-                }
-              }
-            }
-          ]
-        );
+        showError('Authentication expired. Please disconnect and reconnect to your Yoto player.');
       } else {
-        Alert.alert('Error', 'Failed to toggle night light');
+        showError('Failed to toggle night light');
       }
     } finally {
       setIsLoading(false);

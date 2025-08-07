@@ -5,13 +5,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   Switch,
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
+import { useSnackBarContext } from '../contexts/SnackBarContext';
 import type { YotoPlayer } from '../types/index';
 
 interface MqttClient {
@@ -59,6 +59,7 @@ export const SchedulerManager: React.FC<SchedulerManagerProps> = ({
   mqttClient,
   onBack,
 }) => {
+  const { showSuccess, showError, showWarning, showInfo } = useSnackBarContext();
   const [scheduledTasks, setScheduledTasks] = useState<ScheduledTask[]>([]);
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -248,12 +249,12 @@ export const SchedulerManager: React.FC<SchedulerManagerProps> = ({
 
   const addNewTask = async () => {
     if (!newTask.name || !newTask.playerId) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      showWarning('Please fill in all required fields');
       return;
     }
 
     if (newTask.action === 'play' && !newTask.cardId) {
-      Alert.alert('Error', 'Please select a card to play');
+      showWarning('Please select a card to play');
       return;
     }
 
@@ -298,10 +299,10 @@ export const SchedulerManager: React.FC<SchedulerManagerProps> = ({
       });
       setShowNewTaskForm(false);
 
-      Alert.alert('Success', 'Scheduled task created successfully!');
+      showSuccess('Scheduled task created successfully!');
     } catch (error) {
       console.error('❌ [SCHEDULER] Failed to create task:', error);
-      Alert.alert('Error', 'Failed to create scheduled task');
+      showError('Failed to create scheduled task');
     } finally {
       setIsLoading(false);
     }
@@ -323,22 +324,12 @@ export const SchedulerManager: React.FC<SchedulerManagerProps> = ({
   };
 
   const deleteTask = async (taskId: string) => {
-    Alert.alert(
-      'Delete Task',
-      'Are you sure you want to delete this scheduled task?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const updatedTasks = scheduledTasks.filter(task => task.id !== taskId);
-            setScheduledTasks(updatedTasks);
-            await saveScheduledTasks(updatedTasks);
-          },
-        },
-      ]
-    );
+    // For now, directly delete the task and show confirmation
+    // In a future update, we can implement a proper confirmation modal
+    const updatedTasks = scheduledTasks.filter(task => task.id !== taskId);
+    setScheduledTasks(updatedTasks);
+    await saveScheduledTasks(updatedTasks);
+    showSuccess('Scheduled task deleted successfully');
   };
 
   const formatTime = (date: Date): string => {

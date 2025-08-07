@@ -6,12 +6,12 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
-  Alert,
   Image,
   FlatList,
   Switch,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSnackBarContext } from '../contexts/SnackBarContext';
 import type { YotoPlayer } from '../types/index';
 
 interface Content {
@@ -59,6 +59,7 @@ export const EnhancedContentBrowser: React.FC<EnhancedContentBrowserProps> = ({
   onBack,
   onRefreshContent,
 }) => {
+  const { showSuccess, showError, showWarning, showInfo } = useSnackBarContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -192,23 +193,23 @@ export const EnhancedContentBrowser: React.FC<EnhancedContentBrowserProps> = ({
 
   const playCard = async (cardId: string) => {
     if (!mqttClient || !selectedPlayer) {
-      Alert.alert('Error', 'Please select a player first');
+      showWarning('Please select a player first');
       return;
     }
 
     try {
       await mqttClient.playCard(selectedPlayer, cardId);
       const card = content.find(c => c.id === cardId);
-      Alert.alert('Success', `Playing "${card?.title}" on ${players.find(p => p.id === selectedPlayer)?.name}`);
+      showSuccess(`Playing "${card?.title}" on ${players.find(p => p.id === selectedPlayer)?.name}`);
     } catch (error) {
       console.error('❌ [CONTENT] Failed to play card:', error);
-      Alert.alert('Error', 'Failed to play card');
+      showError('Failed to play card');
     }
   };
 
   const createPlaylist = async () => {
     if (!newPlaylist.name.trim()) {
-      Alert.alert('Error', 'Please enter a playlist name');
+      showWarning('Please enter a playlist name');
       return;
     }
 
@@ -234,7 +235,7 @@ export const EnhancedContentBrowser: React.FC<EnhancedContentBrowserProps> = ({
     });
     setShowPlaylistForm(false);
 
-    Alert.alert('Success', 'Playlist created successfully!');
+    showSuccess('Playlist created successfully!');
   };
 
   const addToPlaylist = (cardId: string, playlistId: string) => {
@@ -252,12 +253,12 @@ export const EnhancedContentBrowser: React.FC<EnhancedContentBrowserProps> = ({
     
     const card = content.find(c => c.id === cardId);
     const playlist = playlists.find(p => p.id === playlistId);
-    Alert.alert('Success', `Added "${card?.title}" to "${playlist?.name}"`);
+    showSuccess(`Added "${card?.title}" to "${playlist?.name}"`);
   };
 
   const playPlaylist = async (playlist: Playlist) => {
     if (!mqttClient || !selectedPlayer || playlist.cards.length === 0) {
-      Alert.alert('Error', 'Playlist is empty or no player selected');
+      showWarning('Playlist is empty or no player selected');
       return;
     }
 
@@ -277,12 +278,12 @@ export const EnhancedContentBrowser: React.FC<EnhancedContentBrowserProps> = ({
       setPlaylists(updatedPlaylists);
       await savePlaylists(updatedPlaylists);
 
-      Alert.alert('Success', `Playing playlist "${playlist.name}"`);
+      showSuccess(`Playing playlist "${playlist.name}"`);
       
       // TODO: Implement queue system for auto-playing remaining cards
     } catch (error) {
       console.error('❌ [CONTENT] Failed to play playlist:', error);
-      Alert.alert('Error', 'Failed to play playlist');
+      showError('Failed to play playlist');
     }
   };
 
@@ -294,7 +295,7 @@ export const EnhancedContentBrowser: React.FC<EnhancedContentBrowserProps> = ({
       await onRefreshContent();
     } catch (error) {
       console.error('❌ [CONTENT] Failed to refresh content:', error);
-      Alert.alert('Error', 'Failed to refresh content');
+      showError('Failed to refresh content');
     } finally {
       setIsRefreshing(false);
     }
@@ -358,17 +359,13 @@ export const EnhancedContentBrowser: React.FC<EnhancedContentBrowserProps> = ({
           <TouchableOpacity
             style={styles.playlistButton}
             onPress={() => {
-              Alert.alert(
-                'Add to Playlist',
-                'Select a playlist:',
-                [
-                  ...playlists.map(playlist => ({
-                    text: playlist.name,
-                    onPress: () => addToPlaylist(card.id, playlist.id),
-                  })),
-                  { text: 'Cancel' }
-                ]
-              );
+              // For now, add to first available playlist
+              // TODO: Implement proper playlist selection modal
+              if (playlists.length > 0) {
+                addToPlaylist(card.id, playlists[0].id);
+              } else {
+                showInfo('Create a playlist first to add cards');
+              }
             }}
           >
             <Text style={styles.playlistIcon}>📚</Text>

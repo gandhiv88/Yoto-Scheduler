@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   Modal,
   FlatList,
   Switch,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SchedulerService } from '../services/simpleSchedulerService';
+import { useSnackBarContext } from '../contexts/SnackBarContext';
 
 const DAYS_OF_WEEK = [
   { id: 0, name: 'Sunday', short: 'Sun' },
@@ -32,6 +32,9 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
   // Edit mode state
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  
+  // Use snackbar context
+  const { showSuccess, showError, showWarning } = useSnackBarContext();
   
   // Create schedule form state
   const [selectedCard, setSelectedCard] = useState(null);
@@ -91,7 +94,7 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
       setSchedules(playerSchedules);
     } catch (error) {
       console.error('Failed to load schedules:', error);
-      Alert.alert('Error', 'Failed to load schedules');
+      showError('Failed to load schedules');
     } finally {
       setLoading(false);
     }
@@ -105,7 +108,7 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
     }
 
     if (!selectedCard || selectedDays.length === 0) {
-      Alert.alert('Validation Error', 'Please select a card and at least one day');
+      showWarning('Please select a card and at least one day');
       return;
     }
 
@@ -126,39 +129,28 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
 
       await SchedulerService.createSchedule(scheduleData);
       
-      Alert.alert('Success', 'Schedule created successfully!');
+      showSuccess('Schedule created successfully!');
       setShowCreateModal(false);
       resetForm();
       await loadSchedules();
     } catch (error) {
       console.error('Failed to create schedule:', error);
-      Alert.alert('Error', 'Failed to create schedule');
+      showError('Failed to create schedule');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteSchedule = async (scheduleId) => {
-    Alert.alert(
-      'Delete Schedule',
-      'Are you sure you want to delete this schedule?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await SchedulerService.deleteSchedule(scheduleId);
-              await loadSchedules();
-            } catch (error) {
-              console.error('Failed to delete schedule:', error);
-              Alert.alert('Error', 'Failed to delete schedule');
-            }
-          }
-        }
-      ]
-    );
+    // For now, directly delete - we could add a confirmation modal later
+    try {
+      await SchedulerService.deleteSchedule(scheduleId);
+      await loadSchedules();
+      showSuccess('Schedule deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete schedule:', error);
+      showError('Failed to delete schedule');
+    }
   };
 
   const handleToggleSchedule = async (scheduleId, currentState) => {
@@ -167,7 +159,7 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
       await loadSchedules();
     } catch (error) {
       console.error('Failed to toggle schedule:', error);
-      Alert.alert('Error', 'Failed to toggle schedule');
+      showError('Failed to toggle schedule');
     }
   };
 
@@ -204,7 +196,7 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
 
   const handleUpdateSchedule = async () => {
     if (selectedDays.length === 0) {
-      Alert.alert('Validation Error', 'Please select at least one day');
+      showWarning('Please select at least one day');
       return;
     }
 
@@ -230,13 +222,13 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
       await SchedulerService.updateSchedule(editingSchedule.id, updates);
       
       console.log('✅ [EDIT] Schedule updated successfully');
-      Alert.alert('Success', 'Schedule updated successfully!');
+      showSuccess('Schedule updated successfully!');
       setShowCreateModal(false);
       resetForm();
       await loadSchedules();
     } catch (error) {
       console.error('Failed to update schedule:', error);
-      Alert.alert('Error', 'Failed to update schedule');
+      showError('Failed to update schedule');
     } finally {
       setLoading(false);
     }

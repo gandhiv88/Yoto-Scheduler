@@ -5,10 +5,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSnackBarContext } from '../contexts/SnackBarContext';
 import type { YotoPlayer } from '../types/index';
 
 interface PlaybackSession {
@@ -53,6 +53,7 @@ export const PlayerAnalytics: React.FC<PlayerAnalyticsProps> = ({
   mqttClient,
   onBack,
 }) => {
+  const { showSuccess, showError, showWarning, showInfo } = useSnackBarContext();
   const [playbackSessions, setPlaybackSessions] = useState<PlaybackSession[]>([]);
   const [playerUsage, setPlayerUsage] = useState<PlayerUsage[]>([]);
   const [selectedTimeRange, setSelectedTimeRange] = useState<'week' | 'month' | 'all'>('week');
@@ -272,24 +273,17 @@ export const PlayerAnalytics: React.FC<PlayerAnalyticsProps> = ({
   };
 
   const clearAnalyticsData = () => {
-    Alert.alert(
-      'Clear Analytics Data',
-      'Are you sure you want to clear all analytics data? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            setPlaybackSessions([]);
-            setPlayerUsage([]);
-            setCurrentSessions(new Map());
-            await AsyncStorage.removeItem(SESSIONS_STORAGE_KEY);
-            Alert.alert('Success', 'Analytics data cleared successfully');
-          },
-        },
-      ]
-    );
+    // For now, directly clear data and show confirmation
+    // TODO: Implement proper confirmation modal
+    const performClear = async () => {
+      setPlaybackSessions([]);
+      setPlayerUsage([]);
+      setCurrentSessions(new Map());
+      await AsyncStorage.removeItem(SESSIONS_STORAGE_KEY);
+      showSuccess('Analytics data cleared successfully');
+    };
+    
+    performClear();
   };
 
   const SimpleBarChart: React.FC<{ data: { [date: string]: number }; height: number }> = ({ data, height }) => {

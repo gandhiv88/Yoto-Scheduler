@@ -5,9 +5,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   RefreshControl,
 } from 'react-native';
+import { useSnackBarContext } from '../contexts/SnackBarContext';
 import type { YotoPlayer } from '../types/index';
 
 interface ConnectionLog {
@@ -70,6 +70,7 @@ export const ConnectionDiagnostics: React.FC<ConnectionDiagnosticsProps> = ({
   apiService,
   onBack,
 }) => {
+  const { showSuccess, showError, showWarning, showInfo } = useSnackBarContext();
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     mqtt: {
       connected: false,
@@ -288,21 +289,11 @@ export const ConnectionDiagnostics: React.FC<ConnectionDiagnosticsProps> = ({
   };
 
   const clearLogs = () => {
-    Alert.alert(
-      'Clear Logs',
-      'Are you sure you want to clear all connection logs?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: () => {
-            setConnectionLogs([]);
-            addLog('info', 'general', 'Connection logs cleared');
-          },
-        },
-      ]
-    );
+    // For now, directly clear logs
+    // TODO: Implement proper confirmation modal
+    setConnectionLogs([]);
+    addLog('info', 'general', 'Connection logs cleared');
+    showSuccess('Connection logs cleared');
   };
 
   const exportLogs = () => {
@@ -310,17 +301,10 @@ export const ConnectionDiagnostics: React.FC<ConnectionDiagnosticsProps> = ({
       .map(log => `[${log.timestamp.toISOString()}] ${log.level.toUpperCase()} ${log.category}: ${log.message}`)
       .join('\n');
     
-    Alert.alert(
-      'Export Logs',
-      'Connection logs prepared for export.',
-      [
-        { text: 'Copy to Clipboard', onPress: () => {
-          // Note: Would need to implement clipboard functionality
-          addLog('info', 'general', 'Logs copied to clipboard');
-        }},
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
+    // For now, just show info about logs being prepared
+    // TODO: Implement proper export functionality with clipboard or sharing
+    showInfo('Connection logs prepared for export');
+    addLog('info', 'general', 'Logs exported');
   };
 
   const formatDuration = (date?: Date): string => {

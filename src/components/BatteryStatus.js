@@ -6,18 +6,6 @@ export const BatteryStatus = ({ batteryInfo }) => {
     return null;
   }
 
-  const getBatteryIcon = (level, isCharging) => {
-    if (isCharging) {
-      return '🔌';
-    }
-    
-    if (level >= 80) return '🔋';
-    if (level >= 60) return '🔋';
-    if (level >= 40) return '🪫';
-    if (level >= 20) return '🪫';
-    return '🪫';
-  };
-
   const getBatteryColor = (level) => {
     if (level >= 60) return '#34C759'; // Green
     if (level >= 20) return '#FF9500'; // Orange
@@ -26,77 +14,84 @@ export const BatteryStatus = ({ batteryInfo }) => {
 
   const batteryLevel = batteryInfo.level;
   const isCharging = batteryInfo.isCharging;
+  const batteryColor = getBatteryColor(batteryLevel);
 
   return (
     <View style={styles.container}>
-      <View style={styles.batteryInfo}>
-        <Text style={styles.batteryIcon}>
-          {getBatteryIcon(batteryLevel, isCharging)}
-        </Text>
-        <View style={styles.batteryDetails}>
-          <Text style={[styles.batteryLevel, { color: getBatteryColor(batteryLevel) }]}>
-            {batteryLevel}%
-          </Text>
-          <Text style={styles.batteryStatus}>
-            {isCharging ? 'Charging' : 'Battery'}
-          </Text>
+      {/* Battery Icon */}
+      <View style={styles.batteryIcon}>
+        {/* Battery Body */}
+        <View style={[styles.batteryBody, { borderColor: batteryColor }]}>
+          {/* Battery Fill */}
+          <View
+            style={[
+              styles.batteryFill,
+              {
+                width: `${Math.max(5, batteryLevel)}%`, // Minimum 5% width for visibility
+                backgroundColor: batteryColor,
+              }
+            ]}
+          />
         </View>
+        {/* Battery Tip */}
+        <View style={[styles.batteryTip, { backgroundColor: batteryColor }]} />
       </View>
       
-      {/* Battery bar visualization */}
-      <View style={styles.batteryBar}>
-        <View
-          style={[
-            styles.batteryFill,
-            {
-              width: `${batteryLevel}%`,
-              backgroundColor: getBatteryColor(batteryLevel),
-            }
-          ]}
-        />
-      </View>
+      {/* Battery Percentage */}
+      <Text style={[styles.batteryText, { color: batteryColor }]}>
+        {batteryLevel}%
+      </Text>
+      
+      {/* Charging Indicator */}
+      {isCharging && (
+        <Text style={styles.chargingIcon}>⚡</Text>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F8F9FA',
-    padding: 12,
-    borderRadius: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
-    marginBottom: 10,
-  },
-  batteryInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start', // Make it compact
   },
   batteryIcon: {
-    fontSize: 20,
-    marginRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 6,
   },
-  batteryDetails: {
-    flex: 1,
-  },
-  batteryLevel: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  batteryStatus: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  batteryBar: {
-    marginTop: 8,
-    height: 4,
-    backgroundColor: '#E0E0E0',
+  batteryBody: {
+    width: 20,
+    height: 10,
+    borderWidth: 1,
     borderRadius: 2,
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
+    position: 'relative',
   },
   batteryFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 1,
+  },
+  batteryTip: {
+    width: 2,
+    height: 6,
+    borderTopRightRadius: 1,
+    borderBottomRightRadius: 1,
+    marginLeft: 1,
+  },
+  batteryText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  chargingIcon: {
+    fontSize: 12,
+    marginLeft: 2,
   },
 });

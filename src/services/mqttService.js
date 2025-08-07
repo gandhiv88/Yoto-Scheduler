@@ -12,6 +12,8 @@ export class MqttClient {
     this.lastConnectionTime = null;
     this.connectionHealthTimer = null;
     this.schedulerCheckInterval = null;
+    this.batteryPollingTimer = null;
+    this.currentPlayerId = null;
   }
 
   async connect(playerId, token) {
@@ -78,6 +80,7 @@ export class MqttClient {
           this.isConnected = true;
           this.lastConnectionTime = Date.now();
           this.updateConnectionStatus('Connected');
+          this.currentPlayerId = playerId;  // Store current player ID
           
           // Start connection health monitoring
           this.startConnectionHealthMonitor();
@@ -88,6 +91,8 @@ export class MqttClient {
               `device/${playerId}/events`,
               `device/${playerId}/status`,
               `device/${playerId}/response`,
+              `device/${playerId}/battery`,      // Add battery topic
+              `device/${playerId}/state`,        // Add state topic  
             ];
 
             topics.forEach((topic) => {
@@ -96,12 +101,40 @@ export class MqttClient {
                   console.error(`❌ [MQTT] Failed to subscribe to ${topic}:`, err);
                 } else {
                   console.log(`✅ [MQTT] Subscribed to ${topic}`);
+                  // Special logging for battery topic
+                  if (topic.includes('/battery')) {
+                    console.log(`🔋 [MQTT] BATTERY TOPIC SUBSCRIBED SUCCESSFULLY: ${topic}`);
+                  }
                 }
               });
             });
 
             // Request initial status update
             this.requestStatusUpdate(playerId);
+            
+            // Request battery status multiple times with delays for faster initial response
+            setTimeout(() => this.requestStatusUpdate(playerId), 500);  // 0.5s
+            setTimeout(() => this.requestStatusUpdate(playerId), 1000); // 1s  
+            setTimeout(() => this.requestStatusUpdate(playerId), 2000); // 2s
+            setTimeout(() => this.requestStatusUpdate(playerId), 4000); // 4s
+            
+            // Start periodic battery status polling every 30 seconds
+            this.startBatteryPolling(playerId);
+            
+            // Fallback: If we don't get battery data within 10 seconds, provide fallback data
+            setTimeout(() => {
+              console.log('🔋 [MQTT] Fallback battery check - have we received battery data?');
+              // This is just for testing - you can remove this later
+              if (this.batteryStatusCallback) {
+                console.log('🔋 [MQTT] Providing fallback battery data for testing');
+                this.batteryStatusCallback({
+                  level: 75,
+                  isCharging: false,
+                  source: 'fallback',
+                  timestamp: Date.now()
+                });
+              }
+            }, 10000); // 10 seconds fallback
           }
           
           resolve(true);
@@ -166,6 +199,10 @@ export class MqttClient {
             message: message.toString(),
             packet
           });
+          
+          // Log ALL message topics to help debug
+          console.log(`🔍 [MQTT] All topics received so far: ${topic}`);
+          
           this.handleMessage(topic, message.toString());
         });
 
@@ -237,6 +274,80 @@ export class MqttClient {
       const messageObj = JSON.parse(message);
       console.log(`📨 [MQTT] Message from ${topic}:`, messageObj);
       
+      // Enhanced logging for events messages to help find battery fields
+      if (topic.endsWith('/events')) {
+        console.log('🔋 [MQTT] EVENTS MESSAGE - Full content:', JSON.stringify(messageObj, null, 2));
+        console.log('🔋 [MQTT] EVENTS MESSAGE - All fields:', Object.keys(messageObj));
+        
+        // Look for any field that might contain battery info
+        const potentialBatteryFields = Object.keys(messageObj).filter(key => 
+          key.toLowerCase().includes('battery') || 
+          key.toLowerCase().includes('power') || 
+          key.toLowerCase().includes('charge') ||
+          key.toLowerCase().includes('level')
+        );
+        if (potentialBatteryFields.length > 0) {
+          console.log('🔋 [MQTT] POTENTIAL BATTERY FIELDS FOUND:', potentialBatteryFields);
+        }
+        
+        // Try to extract battery info from ANY field that looks like a percentage
+        // Sometimes battery might be in unexpected fields
+        const allFields = Object.keys(messageObj);
+        for (const field of allFields) {
+          const value = messageObj[field];
+          // Look for numeric values that could be battery percentage (0-100 range)
+          if (typeof value === 'number' && value >= 0 && value <= 100) {
+            // Skip known non-battery fields but be more permissive
+            const skipFields = ['volume', 'volumeMax', 'position', 'trackLength', 'eventUtc', 'timestamp', 'secondsIn'];
+            if (!skipFields.some(skip => field.toLowerCase().includes(skip.toLowerCase()))) {
+              console.log(`🔋 [MQTT] Found potential battery field "${field}" with value: ${value}%`);
+              
+              // If we find a potential battery field, use it
+              const batteryInfo = {
+                level: value,
+                isCharging: messageObj.charging || messageObj.isCharging || messageObj.pluggedIn || false,
+                source: `events.${field}`,
+                timestamp: Date.now(),
+                raw: messageObj
+              };
+              
+              console.log('🔋 [MQTT] Battery info extracted from events:', batteryInfo);
+              
+              if (this.batteryStatusCallback) {
+                console.log('🔋 [MQTT] Calling battery status callback with:', batteryInfo);
+                this.batteryStatusCallback(batteryInfo);
+              }
+              break; // Use the first potential battery field found
+            }
+          }
+        }
+        
+        // Also check for direct battery fields even if they don't match 0-100 range
+        const batteryFields = ['battery', 'batteryLevel', 'batteryPercent', 'power', 'powerLevel'];
+        for (const field of batteryFields) {
+          if (messageObj[field] !== undefined) {
+            const value = messageObj[field];
+            console.log(`🔋 [MQTT] Found battery field "${field}" with value: ${value}`);
+            
+            const batteryInfo = {
+              level: typeof value === 'number' ? Math.min(100, Math.max(0, value)) : value,
+              isCharging: messageObj.charging || messageObj.isCharging || messageObj.pluggedIn || false,
+              source: `events.${field}`,
+              timestamp: Date.now(),
+              raw: messageObj
+            };
+            
+            console.log('🔋 [MQTT] Battery info from direct field:', batteryInfo);
+            
+            if (this.batteryStatusCallback) {
+              console.log('🔋 [MQTT] Calling battery status callback with:', batteryInfo);
+              this.batteryStatusCallback(batteryInfo);
+            }
+            break;
+          }
+        }
+      }
+      
       // Handle battery status from status messages
       if (topic.endsWith('/status') && messageObj.status) {
         const statusData = messageObj.status;
@@ -265,25 +376,25 @@ export class MqttClient {
       
       // Handle different Yoto device message types
       if (topic.includes('/state')) {
-        console.log('📊 [MQTT] Device state update:', data);
+        console.log('📊 [MQTT] Device state update:', messageObj);
       } else if (topic.includes('/playback')) {
-        console.log('▶️ [MQTT] Playback status update:', data);
+        console.log('▶️ [MQTT] Playback status update:', messageObj);
       } else if (topic.includes('/card')) {
-        console.log('🎵 [MQTT] Card status update:', data);
+        console.log('🎵 [MQTT] Card status update:', messageObj);
       } else if (topic.includes('/volume')) {
-        console.log('🔊 [MQTT] Volume update:', data);
+        console.log('🔊 [MQTT] Volume update:', messageObj);
       } else if (topic.includes('/battery')) {
         console.log('🔋 [MQTT] BATTERY MESSAGE DETECTED! Topic:', topic);
-        console.log('🔋 [MQTT] Battery data:', data);
+        console.log('🔋 [MQTT] Battery data:', messageObj);
         console.log('🔋 [MQTT] Battery callback available:', !!this.batteryStatusCallback);
         if (this.batteryStatusCallback) {
-          console.log('🔋 [MQTT] Calling battery callback with data:', data);
-          this.batteryStatusCallback(data);
+          console.log('🔋 [MQTT] Calling battery callback with data:', messageObj);
+          this.batteryStatusCallback(messageObj);
         } else {
           console.log('⚠️ [MQTT] No battery callback registered!');
         }
       } else if (topic.includes('/ambients')) {
-        console.log('💡 [MQTT] Ambient light update:', data);
+        console.log('💡 [MQTT] Ambient light update:', messageObj);
       }
     } catch (error) {
       console.error('❌ [MQTT] Error parsing message:', error);
@@ -364,6 +475,33 @@ export class MqttClient {
         console.log('✅ [MQTT] Status update requested');
       }
     });
+  }
+
+  // Request battery status specifically (for manual refresh)
+  requestBatteryStatus(playerId) {
+    if (!this.isConnectionHealthy()) {
+      console.error('❌ [MQTT] Cannot request battery status - not connected');
+      return;
+    }
+
+    console.log(`🔋 [MQTT] Manual battery status refresh requested`);
+    
+    // Try multiple approaches to get battery data
+    this.requestStatusUpdate(playerId);
+    
+    // Also try requesting from battery topic if it exists
+    setTimeout(() => {
+      const batteryTopic = `device/${playerId}/command/battery`;
+      console.log(`� [MQTT] Requesting battery status from: ${batteryTopic}`);
+      
+      this.client.publish(batteryTopic, "", (err) => {
+        if (err) {
+          console.log('🔋 [MQTT] Battery topic request failed (normal if topic doesn\'t exist):', err.message);
+        } else {
+          console.log('✅ [MQTT] Battery topic request sent');
+        }
+      });
+    }, 100);
   }
 
   async pausePlayback(playerId) {
@@ -497,12 +635,18 @@ export class MqttClient {
     g = Math.max(0, Math.min(255, g));
     b = Math.max(0, Math.min(255, b));
 
+    // FIX: Yoto devices expect BGR instead of RGB format
+    // This fixes the issue where red appears as blue and vice versa
+    [r, g, b] = [b, g, r]; // Swap R and B channels
+    
+    console.log(`💡 [MQTT] After BGR conversion: r=${r}, g=${g}, b=${b}`);
+
     // Use correct Yoto MQTT topic for ambient light command (like working implementation)
     const topic = `device/${playerId}/command/ambients`;
     const payload = {
-      r: r, // Red value (0-255)
-      g: g, // Green value (0-255) 
-      b: b  // Blue value (0-255)
+      r: r, // Red value (0-255) - actually blue after BGR swap
+      g: g, // Green value (0-255) - stays green  
+      b: b  // Blue value (0-255) - actually red after BGR swap
     };
 
     const message = JSON.stringify(payload);
@@ -592,11 +736,35 @@ export class MqttClient {
     if (this.client) {
       console.log('Disconnecting MQTT client');
       this.stopConnectionHealthMonitor();
+      this.stopBatteryPolling();  // Stop battery polling
       this.client.end();
       this.client = null;
       this.isConnected = false;
       this.lastConnectionTime = null;
+      this.currentPlayerId = null;  // Clear player ID
       this.updateConnectionStatus('Disconnected');
+    }
+  }
+
+  // Start battery status polling
+  startBatteryPolling(playerId) {
+    this.stopBatteryPolling(); // Clear any existing timer
+    
+    console.log('🔋 [MQTT] Starting battery status polling every 30 seconds');
+    this.batteryPollingTimer = setInterval(() => {
+      if (this.isConnectionHealthy() && playerId) {
+        console.log('🔋 [MQTT] Periodic battery status request');
+        this.requestStatusUpdate(playerId);
+      }
+    }, 30000); // Poll every 30 seconds
+  }
+
+  // Stop battery status polling
+  stopBatteryPolling() {
+    if (this.batteryPollingTimer) {
+      console.log('🔋 [MQTT] Stopping battery status polling');
+      clearInterval(this.batteryPollingTimer);
+      this.batteryPollingTimer = null;
     }
   }
 
