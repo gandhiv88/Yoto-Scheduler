@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Yoto MQTT Controller",
-    "slug": "yoto-mqtt-controller",
+    "name": "Yoto Scheduler",
+    "slug": "yoto-scheduler",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

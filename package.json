@@ -1,5 +1,5 @@
 {
-  "name": "yoto_app_scheduler_js",
+  "name": "yoto-scheduler",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {

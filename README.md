@@ -1,6 +1,6 @@
-# Yoto MQTT React Native App
+# Yoto Scheduler
 
-A React Native Expo application for controlling Yoto players via MQTT. This app provides direct control over Yoto devices, allowing you to play, pause, and stop audio cards without switching between multiple applications.
+A React Native Expo application for controlling and scheduling Yoto players via MQTT. This app provides direct control over Yoto devices and allows you to schedule audio card playback, eliminating the need to switch between multiple applications.
 
 ## Features
 
@@ -9,6 +9,7 @@ A React Native Expo application for controlling Yoto players via MQTT. This app 
 - **MQTT Control** - Real-time communication with Yoto devices for instant response
 - **Card Management** - Browse and select from your available audio cards
 - **Playback Control** - Play, pause, and stop functionality
+- **Smart Scheduling** - Schedule audio card playback at specific times
 - **Connection Monitoring** - Real-time connection status and error handling
 
 ## Technical Stack
@@ -74,7 +75,7 @@ The app includes both real API integration and mock data fallbacks, allowing for
 
 ## Future Enhancements
 
-- **Smart Scheduling** - Time-based automatic card playback
+- **Advanced Scheduling** - Multiple schedules, recurring patterns, and conditional triggers
 - **Multi-Player Support** - Control multiple Yoto devices simultaneously
 - **Playlist Management** - Create and manage custom playlists
 - **Voice Control** - Integration with device voice assistants
@@ -82,7 +83,7 @@ The app includes both real API integration and mock data fallbacks, allowing for
 
 ## Contributing
 
-This project demonstrates a working MQTT implementation for Yoto player control. Contributions are welcome, especially for:
+This project demonstrates a working MQTT implementation for Yoto player control and scheduling. Contributions are welcome, especially for:
 
 - UI/UX improvements
 - Additional player controls
