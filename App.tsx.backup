@@ -19,7 +19,6 @@ import { MqttClient } from './src/services/mqttService';
 import { SchedulerService } from './src/services/simpleSchedulerService';
 import { AmbientLightControl } from './src/components/AmbientLightControl';
 import { SchedulerScreen } from './src/components/SchedulerScreen';
-import { BatteryStatus } from './src/components/BatteryStatus';
 import type { YotoPlayer, YotoCard } from './src/types/index';
 
 const CLIENT_ID = 'NJ4lW4Y3FrBcpR4R6YlkKs30gTxPjvC4';
@@ -36,7 +35,17 @@ export default function App() {
   const [showAmbientControl, setShowAmbientControl] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
   const [processedCallbackUrl, setProcessedCallbackUrl] = useState<string | null>(null);
-  const [batteryInfo, setBatteryInfo] = useState<any>(null);
+
+  // Battery status state
+  const [batteryStatus, setBatteryStatus] = useState<{
+    level: number | null;
+    isCharging: boolean;
+    lastUpdated: Date | null;
+  }>({
+    level: null,
+    isCharging: false,
+    lastUpdated: null
+  });
 
   const [authUrl, setAuthUrl] = useState<string>('');
 
@@ -48,6 +57,65 @@ export default function App() {
     // Initialize scheduler service
     SchedulerService.initialize().catch(console.error);
   }, []);
+
+  // Battery status monitoring
+  useEffect(() => {
+    if (!mqttClient) return;
+
+    const handleBatteryUpdate = (batteryData: any) => {
+      console.log('🔋 [APP] Battery update received:', batteryData);
+      setBatteryStatus({
+        level: batteryData.level || batteryData.percentage || batteryData.battery || null,
+        isCharging: batteryData.charging || batteryData.isCharging || batteryData.plugged || false,
+        lastUpdated: new Date()
+      });
+    };
+
+    // Set up battery status callback
+    console.log('🔋 [APP] Setting up battery callback, mqttClient available:', !!mqttClient);
+    console.log('🔋 [APP] onBatteryStatusChange method available:', !!(mqttClient?.onBatteryStatusChange));
+    
+    if (mqttClient.onBatteryStatusChange) {
+      mqttClient.onBatteryStatusChange(handleBatteryUpdate);
+      console.log('🔋 [APP] Battery callback registered successfully');
+    } else {
+      console.log('⚠️ [APP] No onBatteryStatusChange method found on mqttClient');
+    }
+
+    // Try to get battery info from REST API instead
+    useEffect(() => {
+    if (!selectedPlayer?.id || !mqttClient) {
+      return;
+    }
+
+    console.log('🔋 [APP] Setting up battery callback, mqttClient available:', !!mqttClient);
+    console.log('🔋 [APP] onBatteryStatusChange method available:', typeof mqttClient.onBatteryStatusChange === 'function');
+
+    if (mqttClient.onBatteryStatusChange) {
+      // Set up battery status callback for MQTT messages
+      mqttClient.onBatteryStatusChange((batteryInfo: any) => {
+        console.log('🔋 [APP] Received battery info from MQTT:', batteryInfo);
+        
+        if (batteryInfo && batteryInfo.level !== undefined) {
+          setBatteryStatus({
+            level: batteryInfo.level,
+            isCharging: batteryInfo.isCharging || false,
+            lastUpdated: new Date()
+          });
+          console.log('🔋 [APP] Battery status updated from MQTT:', batteryInfo.level + '%');
+        }
+      });
+      
+      console.log('🔋 [APP] Battery callback registered successfully');
+    }
+
+    // Cleanup
+    return () => {
+      if (mqttClient.onBatteryStatusChange) {
+        mqttClient.onBatteryStatusChange(null);
+      }
+    };
+  }, [selectedPlayer, mqttClient]);
 
   const setupDeepLinking = () => {
     console.log('🔗 [APP] Setting up deep linking for OAuth callbacks...');
@@ -156,7 +224,6 @@ export default function App() {
       setCards([]);
       setMqttClient(null);
       setConnectionStatus('Disconnected');
-      setBatteryInfo(null);
       setShowAmbientControl(false);
       setShowScheduler(false);
     } catch (error) {
@@ -179,12 +246,6 @@ export default function App() {
       // Set up status callback after creating client
       client.connectionStatusCallback = (status: string) => {
         setConnectionStatus(status);
-      };
-
-      // Set up battery status callback
-      client.batteryStatusCallback = (battery: any) => {
-        console.log('🔋 [APP] Battery status received:', battery);
-        setBatteryInfo(battery);
       };
 
       const connected = await client.connect(player.id, token);
@@ -263,7 +324,6 @@ export default function App() {
       setMqttClient(null);
       setSelectedPlayer(null);
       setConnectionStatus('Disconnected');
-      setBatteryInfo(null);
       Alert.alert('Disconnected', 'Successfully disconnected from player');
     } else {
       Alert.alert('Info', 'No active connection to disconnect');
@@ -390,34 +450,56 @@ export default function App() {
 
         {/* Connection Status */}
         <View style={styles.statusContainer}>
-          <Text style={styles.statusText}>MQTT Connection: {connectionStatus}</Text>
-          {selectedPlayer && (
-            <>
-              <Text style={styles.playerText}>Connected to: {selectedPlayer.name}</Text>
-              <View style={styles.connectionButtonsContainer}>
-                <TouchableOpacity style={styles.disconnectButton} onPress={disconnectFromPlayer}>
-                  <Text style={styles.disconnectButtonText}>Disconnect</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.refreshButton} onPress={refreshConnection}>
-                  <Text style={styles.refreshButtonText}>Refresh</Text>
-                </TouchableOpacity>
+          <View style={styles.statusRow}>
+            <View style={styles.connectionInfo}>
+              <Text style={styles.statusText}>MQTT Connection: {connectionStatus}</Text>
+              {selectedPlayer && (
+                <Text style={styles.playerText}>Connected to: {selectedPlayer.name}</Text>
+              )}
+            </View>
+            
+            {/* Battery Status */}
+            {selectedPlayer && mqttClient?.isConnectionHealthy() && (
+              <View style={styles.batteryInfo}>
+                {batteryStatus.level !== null ? (
+                  <View style={styles.batteryContainer}>
+                    <Text style={styles.batteryText}>
+                      🔋 {batteryStatus.level}%
+                      {batteryStatus.isCharging && ' ⚡'}
+                    </Text>
+                    <View style={styles.batteryBar}>
+                      <View 
+                        style={[
+                          styles.batteryFill, 
+                          { 
+                            width: `${Math.max(5, batteryStatus.level)}%`,
+                            backgroundColor: 
+                              batteryStatus.level > 30 ? '#34C759' : 
+                              batteryStatus.level > 10 ? '#FFCC00' : 
+                              '#FF3B30'
+                          }
+                        ]} 
+                      />
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={styles.batteryText}>🔋 Unknown</Text>
+                )}
               </View>
-            </>
-          )}
-        </View>
-
-        {/* Battery Status */}
-        {(batteryInfo || selectedPlayer) && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Battery Status</Text>
-            <BatteryStatus batteryInfo={batteryInfo || { level: 50, isCharging: false }} />
-            {!batteryInfo && (
-              <Text style={styles.playerText}>
-                Waiting for battery data from MQTT...
-              </Text>
             )}
           </View>
-        )}
+          
+          {selectedPlayer && (
+            <View style={styles.connectionButtonsContainer}>
+              <TouchableOpacity style={styles.disconnectButton} onPress={disconnectFromPlayer}>
+                <Text style={styles.disconnectButtonText}>Disconnect</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.refreshButton} onPress={refreshConnection}>
+                <Text style={styles.refreshButtonText}>Refresh</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
         {/* Players Section */}
         <View style={styles.section}>
@@ -622,6 +704,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 5,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  connectionInfo: {
+    flex: 1,
+    marginRight: 15,
+  },
+  batteryInfo: {
+    alignItems: 'flex-end',
+  },
+  batteryContainer: {
+    alignItems: 'center',
+    minWidth: 80,
+  },
+  batteryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 5,
+  },
+  batteryBar: {
+    width: 60,
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  batteryFill: {
+    height: '100%',
+    borderRadius: 4,
+    minWidth: 3,
   },
   section: {
     backgroundColor: '#FFFFFF',

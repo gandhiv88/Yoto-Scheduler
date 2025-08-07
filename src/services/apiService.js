@@ -115,6 +115,40 @@ export class YotoAPI {
     }
   }
 
+  static async getDeviceStatus(deviceId) {
+    try {
+      console.log(`🔋 [API] Fetching device status for ${deviceId}...`);
+      
+      // Try the device-v2 format first (consistent with other endpoints)
+      let status;
+      try {
+        status = await this.makeRequest(`/device-v2/devices/${deviceId}/status`);
+        console.log('🔋 [API] Device status response (device-v2 format):', status);
+        return status;
+      } catch (error) {
+        console.log(`⚠️ [API] device-v2 format failed (${error.message}), trying v2 format...`);
+      }
+      
+      // Fallback to the v2 format you mentioned
+      try {
+        status = await this.makeRequest(`/v2/${deviceId}/status`);
+        console.log('🔋 [API] Device status response (v2 format):', status);
+        return status;
+      } catch (error) {
+        console.log(`⚠️ [API] v2 format failed (${error.message}), trying v1 format...`);
+      }
+      
+      // Try v1 format as another fallback
+      status = await this.makeRequest(`/v1/devices/${deviceId}/status`);
+      console.log('🔋 [API] Device status response (v1 format):', status);
+      return status;
+      
+    } catch (error) {
+      console.error(`❌ [API] Failed to fetch device status for ${deviceId} with all formats:`, error);
+      throw error;
+    }
+  }
+
   static async getCards() {
     try {
       console.log('🔍 [API] Fetching cards from Yoto API...');

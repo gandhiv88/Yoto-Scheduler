@@ -82,6 +82,8 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
     return () => clearInterval(interval);
   }, [mqttClient]); // Only re-run when mqttClient changes
 
+  // Load schedules when component mounts
+
   const loadSchedules = async () => {
     try {
       setLoading(true);
@@ -166,21 +168,6 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
     } catch (error) {
       console.error('Failed to toggle schedule:', error);
       Alert.alert('Error', 'Failed to toggle schedule');
-    }
-  };
-
-  // Test a specific schedule
-  const testScheduleNow = async (schedule) => {
-    console.log('🧪 [TEST] Testing schedule immediately:', schedule.cardTitle);
-    Alert.alert('Testing Schedule', `Testing "${schedule.cardTitle}" now...`);
-    
-    try {
-      // Import executeSchedule method temporarily to test
-      await SchedulerService.executeSchedule(schedule, mqttClient);
-      Alert.alert('Test Complete', `Attempted to play "${schedule.cardTitle}". Check logs for results.`);
-    } catch (error) {
-      console.error('❌ [TEST] Schedule test failed:', error);
-      Alert.alert('Test Failed', error.message);
     }
   };
 
@@ -384,13 +371,6 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
         
         <View style={styles.scheduleActions}>
           <TouchableOpacity
-            style={styles.testButton}
-            onPress={() => testScheduleNow(item)}
-          >
-            <Text style={styles.testButtonText}>🧪 Test</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
             style={styles.editButton}
             onPress={() => handleEditSchedule(item)}
           >
@@ -445,10 +425,12 @@ export function SchedulerScreen({ player, cards, mqttClient, onBack }) {
 
       {/* Player Info */}
       <View style={styles.playerInfo}>
-        <Text style={styles.playerName}>📱 {player.name}</Text>
-        <Text style={styles.playerStatus}>
-          {mqttClient?.isConnectionHealthy() ? '🟢 Online' : '🔴 Offline'}
-        </Text>
+        <View style={styles.playerDetails}>
+          <Text style={styles.playerName}>📱 {player.name}</Text>
+          <Text style={styles.playerStatus}>
+            {mqttClient?.isConnectionHealthy() ? '🟢 Online' : '🔴 Offline'}
+          </Text>
+        </View>
       </View>
 
       {/* Schedules List */}
@@ -813,6 +795,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  playerDetails: {
+    flex: 1,
   },
   playerName: {
     fontSize: 16,
@@ -904,19 +892,7 @@ const styles = StyleSheet.create({
   scheduleActions: {
     flexDirection: 'row',
     marginTop: 15,
-    gap: 8,
-  },
-  testButton: {
-    backgroundColor: '#FF9500',
-    padding: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    flex: 1,
-  },
-  testButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '500',
+    gap: 10,
   },
   editButton: {
     backgroundColor: '#007AFF',
@@ -927,7 +903,7 @@ const styles = StyleSheet.create({
   },
   editButtonText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '500',
   },
   deleteButton: {

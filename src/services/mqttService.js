@@ -8,6 +8,7 @@ export class MqttClient {
     this.client = null;
     this.isConnected = false;
     this.connectionStatusCallback = null;
+    this.batteryStatusCallback = null;
     this.lastConnectionTime = null;
     this.connectionHealthTimer = null;
     this.schedulerCheckInterval = null;
@@ -186,14 +187,14 @@ export class MqttClient {
       return;
     }
 
-    // Subscribe to Yoto device topics using correct format
+    // Subscribe to Yoto device topics using correct format (no leading slash)
     const topics = [
-      `/device/${playerId}/state`,        // Device state updates
-      `/device/${playerId}/playback`,     // Playback status
-      `/device/${playerId}/volume`,       // Volume changes
-      `/device/${playerId}/card`,         // Card status
-      `/device/${playerId}/battery`,      // Battery status
-      `/device/${playerId}/ambients`      // Ambient light status
+      `device/${playerId}/state`,        // Device state updates
+      `device/${playerId}/playback`,     // Playback status
+      `device/${playerId}/volume`,       // Volume changes
+      `device/${playerId}/card`,         // Card status
+      `device/${playerId}/battery`,      // Battery status
+      `device/${playerId}/ambients`      // Ambient light status
     ];
 
     console.log(`🔔 [MQTT] Attempting to subscribe to ${topics.length} topics...`);
@@ -211,6 +212,10 @@ export class MqttClient {
             console.error(`❌ [MQTT] Failed to subscribe to ${topic}:`, err);
           } else if (granted) {
             console.log(`✅ [MQTT] Subscribed to ${topic}`, granted);
+            // Add special logging for battery topic
+            if (topic.includes('/battery')) {
+              console.log(`🔋 [MQTT] BATTERY TOPIC SUBSCRIBED: ${topic}`);
+            }
           } else {
             console.log(`✅ [MQTT] Subscribed to ${topic}`);
           }
@@ -221,8 +226,42 @@ export class MqttClient {
 
   handleMessage(topic, message) {
     try {
-      const data = JSON.parse(message);
-      console.log(`📨 [MQTT] Message from ${topic}:`, data);
+      // Debug: Log all incoming messages with detailed topic info
+      console.log('📨 [MQTT] Message received:', {
+        topic,
+        message: message.toString(),
+        isBattery: topic.includes('/battery'),
+        packet: arguments[2]
+      });
+      
+      const messageObj = JSON.parse(message);
+      console.log(`📨 [MQTT] Message from ${topic}:`, messageObj);
+      
+      // Handle battery status from status messages
+      if (topic.endsWith('/status') && messageObj.status) {
+        const statusData = messageObj.status;
+        console.log('🔋 [MQTT] Status message received, checking for battery data...');
+        console.log('🔋 [MQTT] Available status fields:', Object.keys(statusData));
+        
+        // Check for battery information in the status message
+        if (statusData.batteryLevel !== undefined || statusData.battery !== undefined) {
+          const batteryLevel = statusData.batteryLevel || statusData.battery;
+          const batteryInfo = {
+            level: batteryLevel,
+            isCharging: statusData.charging || false,
+            raw: statusData.batteryLevelRaw,
+            voltage: statusData.battery,
+            temp: statusData.batteryTemp
+          };
+          
+          console.log('🔋 [MQTT] Battery info found in status message:', batteryInfo);
+          
+          if (this.batteryStatusCallback) {
+            console.log('🔋 [MQTT] Calling battery status callback with:', batteryInfo);
+            this.batteryStatusCallback(batteryInfo);
+          }
+        }
+      }
       
       // Handle different Yoto device message types
       if (topic.includes('/state')) {
@@ -234,7 +273,15 @@ export class MqttClient {
       } else if (topic.includes('/volume')) {
         console.log('🔊 [MQTT] Volume update:', data);
       } else if (topic.includes('/battery')) {
-        console.log('🔋 [MQTT] Battery update:', data);
+        console.log('🔋 [MQTT] BATTERY MESSAGE DETECTED! Topic:', topic);
+        console.log('🔋 [MQTT] Battery data:', data);
+        console.log('🔋 [MQTT] Battery callback available:', !!this.batteryStatusCallback);
+        if (this.batteryStatusCallback) {
+          console.log('🔋 [MQTT] Calling battery callback with data:', data);
+          this.batteryStatusCallback(data);
+        } else {
+          console.log('⚠️ [MQTT] No battery callback registered!');
+        }
       } else if (topic.includes('/ambients')) {
         console.log('💡 [MQTT] Ambient light update:', data);
       }
@@ -528,6 +575,10 @@ export class MqttClient {
 
   onConnectionStatusChange(callback) {
     this.connectionStatusCallback = callback;
+  }
+
+  onBatteryStatusChange(callback) {
+    this.batteryStatusCallback = callback;
   }
 
   updateConnectionStatus(status) {
