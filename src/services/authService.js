@@ -2,15 +2,22 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
+import { 
+  YOTO_CLIENT_ID, 
+  YOTO_REDIRECT_URI, 
+  YOTO_AUTH_ENDPOINT, 
+  YOTO_TOKEN_ENDPOINT,
+  validateConfig 
+} from '../config/env';
 
 // Complete the auth session on web browsers
 WebBrowser.maybeCompleteAuthSession();
 
 export class YotoAuth {
-  static CLIENT_ID = 'NJ4lW4Y3FrBcpR4R6YlkKs30gTxPjvC4';
-  static REDIRECT_URI = 'https://gandhiv88.github.io/yoto-callback/';
-  static YOTO_AUTH_ENDPOINT = 'https://login.yotoplay.com/authorize';
-  static YOTO_TOKEN_ENDPOINT = 'https://login.yotoplay.com/oauth/token';
+  static CLIENT_ID = YOTO_CLIENT_ID;
+  static REDIRECT_URI = YOTO_REDIRECT_URI;
+  static YOTO_AUTH_ENDPOINT = YOTO_AUTH_ENDPOINT;
+  static YOTO_TOKEN_ENDPOINT = YOTO_TOKEN_ENDPOINT;
   
   // Storage keys for secure storage
   static ACCESS_TOKEN_KEY = 'yoto_access_token';
@@ -107,6 +114,9 @@ export class YotoAuth {
   // Get the OAuth URL for WebView with PKCE (fallback to standard OAuth if PKCE fails)
   static async getAuthUrl() {
     try {
+      // Validate configuration before proceeding
+      validateConfig();
+      
       // Clear any previous processed codes for new auth session
       this.processedAuthCodes.clear();
       

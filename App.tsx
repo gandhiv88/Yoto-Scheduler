@@ -19,10 +19,10 @@ import { SchedulerService } from './src/services/simpleSchedulerService';
 import { AmbientLightControl } from './src/components/AmbientLightControl';
 import { SchedulerScreen } from './src/components/SchedulerScreen';
 import { BatteryStatus } from './src/components/BatteryStatus';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { SnackBarProvider, useSnackBarContext } from './src/contexts/SnackBarContext';
+import { YOTO_CLIENT_ID, validateConfig } from './src/config/env';
 import type { YotoPlayer, YotoCard } from './src/types/index';
-
-const CLIENT_ID = 'NJ4lW4Y3FrBcpR4R6YlkKs30gTxPjvC4';
 
 // Internal App component that uses the SnackBar context
 const AppContent: React.FC = () => {
@@ -45,11 +45,30 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     console.log('App component mounted, checking authentication status...');
+    
+    // Validate configuration on startup
+    try {
+      validateConfig();
+      YotoAPI.initialize();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown configuration error';
+      console.error('❌ [CONFIG] Configuration validation failed:', error);
+      showError(`Configuration Error: ${errorMessage}`);
+      return;
+    }
+    
     checkAuthenticationStatus();
     setupDeepLinking();
     
     // Initialize scheduler service
     SchedulerService.initialize().catch(console.error);
+    
+    // Cleanup function for timers and connections
+    return () => {
+      if (mqttClient) {
+        mqttClient.disconnect();
+      }
+    };
   }, []);
 
   const setupDeepLinking = () => {
@@ -533,12 +552,14 @@ const AppContent: React.FC = () => {
   );
 };
 
-// Main App component wrapped with SnackBarProvider
+// Main App component wrapped with Error Boundary and SnackBarProvider
 export default function App() {
   return (
-    <SnackBarProvider>
-      <AppContent />
-    </SnackBarProvider>
+    <ErrorBoundary>
+      <SnackBarProvider>
+        <AppContent />
+      </SnackBarProvider>
+    </ErrorBoundary>
   );
 }
 

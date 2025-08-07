@@ -1,8 +1,16 @@
 import { getValidAccessToken } from '../utils/tokenUtils';
+import { YOTO_API_BASE_URL, YOTO_CLIENT_ID, validateConfig } from '../config/env';
 
 export class YotoAPI {
-  static BASE_URL = 'https://api.yotoplay.com';
-  static CLIENT_ID = 'your_client_id_here'; // Replace with your actual client ID
+  static BASE_URL = YOTO_API_BASE_URL;
+  static CLIENT_ID = YOTO_CLIENT_ID;
+
+  /**
+   * Initialize the API service and validate configuration
+   */
+  static initialize() {
+    validateConfig();
+  }
 
   /**
    * Set the client ID for authentication

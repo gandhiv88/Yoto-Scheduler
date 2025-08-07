@@ -1,4 +1,5 @@
 import mqtt from 'mqtt';
+import { MQTT_BROKER_URL, MQTT_KEEPALIVE, MQTT_PORT, IS_DEV } from '../config/env';
 
 console.log('🔍 [MQTT] Imported mqtt:', mqtt);
 console.log('🔍 [MQTT] mqtt.connect type:', typeof mqtt.connect);
@@ -14,6 +15,9 @@ export class MqttClient {
     this.schedulerCheckInterval = null;
     this.batteryPollingTimer = null;
     this.currentPlayerId = null;
+    
+    // Track all timers for proper cleanup
+    this.activeTimers = new Set();
   }
 
   async connect(playerId, token) {
@@ -23,7 +27,7 @@ export class MqttClient {
       const username = `${playerId}?x-amz-customauthorizer-name=PublicJWTAuthorizer`;
       
       // MQTT WebSocket URL for AWS IoT (without /mqtt path)
-      const brokerUrl = `wss://aqrphjqbp3u2z-ats.iot.eu-west-2.amazonaws.com`;
+      const brokerUrl = MQTT_BROKER_URL;
       
       // Validate token format
       console.log('🔐 [MQTT] Token validation:', {
@@ -35,12 +39,12 @@ export class MqttClient {
       
       // MQTT connection options using exact format from working code
       const options = {
-        keepalive: 300,               // Reduced to 5 minutes like working code
-        port: 443,
+        keepalive: MQTT_KEEPALIVE,        // Use config value
+        port: MQTT_PORT,                  // Use config value
         protocol: "wss",
         username: username,
         password: token,
-        reconnectPeriod: 0,           // Disable automatic reconnect (we'll handle manually)
+        reconnectPeriod: 0,               // Disable automatic reconnect (we'll handle manually)
         clientId: clientId,
         ALPNProtocols: ["x-amzn-mqtt-ca"], // CRITICAL: AWS IoT ALPN protocol
       };
@@ -735,8 +739,7 @@ export class MqttClient {
   disconnect() {
     if (this.client) {
       console.log('Disconnecting MQTT client');
-      this.stopConnectionHealthMonitor();
-      this.stopBatteryPolling();  // Stop battery polling
+      this.stopAllTimers();
       this.client.end();
       this.client = null;
       this.isConnected = false;
@@ -746,12 +749,38 @@ export class MqttClient {
     }
   }
 
+  // Helper method to create tracked timers
+  createTimer(callback, interval) {
+    const timerId = setInterval(callback, interval);
+    this.activeTimers.add(timerId);
+    return timerId;
+  }
+
+  // Helper method to clear tracked timer
+  clearTimer(timerId) {
+    if (timerId) {
+      clearInterval(timerId);
+      this.activeTimers.delete(timerId);
+    }
+  }
+
+  // Stop all active timers
+  stopAllTimers() {
+    console.log(`🧹 [MQTT] Cleaning up ${this.activeTimers.size} active timers`);
+    this.activeTimers.forEach(timerId => clearInterval(timerId));
+    this.activeTimers.clear();
+    
+    // Also clear specific timer references
+    this.connectionHealthTimer = null;
+    this.batteryPollingTimer = null;
+  }
+
   // Start battery status polling
   startBatteryPolling(playerId) {
     this.stopBatteryPolling(); // Clear any existing timer
     
     console.log('🔋 [MQTT] Starting battery status polling every 30 seconds');
-    this.batteryPollingTimer = setInterval(() => {
+    this.batteryPollingTimer = this.createTimer(() => {
       if (this.isConnectionHealthy() && playerId) {
         console.log('🔋 [MQTT] Periodic battery status request');
         this.requestStatusUpdate(playerId);
@@ -763,7 +792,7 @@ export class MqttClient {
   stopBatteryPolling() {
     if (this.batteryPollingTimer) {
       console.log('🔋 [MQTT] Stopping battery status polling');
-      clearInterval(this.batteryPollingTimer);
+      this.clearTimer(this.batteryPollingTimer);
       this.batteryPollingTimer = null;
     }
   }
@@ -787,7 +816,7 @@ export class MqttClient {
     this.stopConnectionHealthMonitor();
     
     // Check connection health every 30 seconds
-    this.connectionHealthTimer = setInterval(() => {
+    this.connectionHealthTimer = this.createTimer(() => {
       if (!this.isConnectionHealthy()) {
         console.log('⚠️ [MQTT] Connection health check failed, connection may be stale');
         this.updateConnectionStatus('Connection Health Check Failed');
@@ -800,7 +829,7 @@ export class MqttClient {
   // Stop connection health monitoring
   stopConnectionHealthMonitor() {
     if (this.connectionHealthTimer) {
-      clearInterval(this.connectionHealthTimer);
+      this.clearTimer(this.connectionHealthTimer);
       this.connectionHealthTimer = null;
     }
   }
