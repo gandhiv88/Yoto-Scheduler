@@ -7,16 +7,21 @@ const ENV_CONFIG = {
   YOTO_REDIRECT_URI: Constants.expoConfig?.extra?.yotoRedirectUri || 'https://gandhiv88.github.io/yoto-callback/',
   
   // API Endpoints
-  YOTO_API_BASE_URL: 'https://api.yotoplay.com/v1',
-  YOTO_AUTH_URL: 'https://auth.yotoplay.com',
+  YOTO_API_BASE_URL: 'https://api.yotoplay.com',
+  YOTO_AUTH_URL: 'https://login.yotoplay.com',
+  YOTO_AUTH_ENDPOINT: 'https://login.yotoplay.com/authorize',
+  YOTO_TOKEN_ENDPOINT: 'https://login.yotoplay.com/oauth/token',
   
   // MQTT Configuration
   MQTT_BROKER: 'aqrphjqbp3u2z-ats.iot.eu-west-2.amazonaws.com',
+  MQTT_BROKER_URL: 'wss://aqrphjqbp3u2z-ats.iot.eu-west-2.amazonaws.com:443',
   MQTT_PORT: 443,
+  MQTT_KEEPALIVE: 60,
   MQTT_PROTOCOL: 'wss',
   
   // Debug Configuration
   LOG_LEVEL: Constants.expoConfig?.extra?.logLevel || 'debug',
+  IS_DEV: __DEV__,
   
   // App Configuration
   CONNECTION_TIMEOUT: 30000,
@@ -43,9 +48,18 @@ export const {
   YOTO_AUTH_ENDPOINT,
   YOTO_TOKEN_ENDPOINT,
   YOTO_API_BASE_URL,
+  YOTO_AUTH_URL,
+  MQTT_BROKER,
   MQTT_BROKER_URL,
   MQTT_KEEPALIVE,
   MQTT_PORT,
+  MQTT_PROTOCOL,
   IS_DEV,
-  LOG_LEVEL
+  LOG_LEVEL,
+  CONNECTION_TIMEOUT,
+  RETRY_ATTEMPTS,
+  RETRY_DELAY
 } = ENV_CONFIG;
+
+// Export the entire config object
+export default ENV_CONFIG;
