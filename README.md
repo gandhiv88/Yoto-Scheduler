@@ -2,6 +2,63 @@
 
 A comprehensive React Native Expo application for controlling and scheduling Yoto players via MQTT. This app transforms your mobile device into a powerful remote control and scheduler for your Yoto players, providing seamless audio card management and playback automation.
 
+---
+
+## 📱 **Quick Start - Try the App Now**
+
+### **🚀 Instant Access via Expo Go**
+
+**Step 1: Install Expo Go on Your Device**
+- **📱 iOS**: [Download from App Store](https://apps.apple.com/app/expo-go/id982107779)
+- **🤖 Android**: [Download from Google Play](https://play.google.com/store/apps/details?id=host.exp.exponent)
+
+**Step 2: Launch the App Instantly**
+
+**Option A: Direct Development Link (Recommended)**
+- **📲 Tap this link on your mobile device**: `https://expo.dev/preview/update?message=Publish+app+for+testing&updateRuntimeVersion=1.0.0&createdAt=2025-08-17T05%3A05%3A55.816Z&slug=exp&projectId=7a24c41c-1c8a-4c69-807c-10668ac7aa83&group=0aa154b6-820c-43b6-9975-67533d175baf`
+- **🔄 Auto-opens in Expo Go** - No QR scanning needed!
+
+**Option B: QR Code Method (Alternative)**
+- **🌐 Open the development link above** on a desktop browser
+- **📱 Scan the QR code** displayed on the page with Expo Go camera
+
+**Step 3: Start Using the App**
+1. **✅ App loads automatically** in Expo Go
+2. **🔐 Login** with your Yoto account credentials  
+3. **🎮 Select your Yoto player** from discovered devices
+4. **🎵 Start controlling** your Yoto player remotely!
+
+### **📋 Detailed Expo Go Instructions**
+
+#### **For iOS Users:**
+1. **Install Expo Go**: Search "Expo Go" in App Store and install
+2. **Open the link**: Tap `https://expo.dev/preview/update?message=Publish+app+for+testing&updateRuntimeVersion=1.0.0&createdAt=2025-08-17T05%3A05%3A55.816Z&slug=exp&projectId=7a24c41c-1c8a-4c69-807c-10668ac7aa83&group=0aa154b6-820c-43b6-9975-67533d175baf` on your iPhone
+3. **Allow app opening**: iOS will ask "Open in Expo Go?" - tap "Open"
+4. **Wait for loading**: App downloads and launches automatically
+5. **Login and enjoy**: Use your Yoto credentials to start controlling
+
+#### **For Android Users:**
+1. **Install Expo Go**: Search "Expo Go" in Google Play Store and install
+2. **Open the link**: Tap `https://expo.dev/preview/update?message=Publish+app+for+testing&updateRuntimeVersion=1.0.0&createdAt=2025-08-17T05%3A05%3A55.816Z&slug=exp&projectId=7a24c41c-1c8a-4c69-807c-10668ac7aa83&group=0aa154b6-820c-43b6-9975-67533d175baf` on your Android device
+3. **Choose app**: Android will ask which app to open with - select "Expo Go"
+4. **Wait for loading**: App downloads and launches automatically
+5. **Login and enjoy**: Use your Yoto credentials to start controlling
+
+### **🔄 Alternative: QR Code Method**
+If you prefer QR codes:
+```bash
+# Clone and run locally
+git clone https://github.com/gandhiv88/Yoto-Scheduler.git
+cd yoto_app_scheduler_js
+npm install
+npx expo start --tunnel
+# Scan QR with Expo Go camera
+```
+
+**✨ No installation, no build process - just instant access to test the app!**
+
+---
+
 ## 🎯 What This App Does
 
 Yoto Scheduler bridges the gap between your Yoto players and modern scheduling needs. Instead of manually inserting cards and managing playback, this app provides:
