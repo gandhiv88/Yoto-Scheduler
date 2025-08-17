@@ -2,6 +2,7 @@
   "expo": {
     "name": "Yoto Scheduler",
     "slug": "yoto-scheduler",
+    "owner": "gandhiv88",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -85,7 +86,7 @@
         "origin": false
       },
       "eas": {
-        "projectId": "f4de5acd-77d8-45d2-83ab-3262b7033ad9"
+        "projectId": "7a24c41c-1c8a-4c69-807c-10668ac7aa83"
       }
     }
   }

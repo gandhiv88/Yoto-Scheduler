@@ -2,61 +2,39 @@ export default {
   expo: {
     name: "Yoto Scheduler",
     slug: "yoto-scheduler",
+    owner: "gandhiv88",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
-    newArchEnabled: true,
-    scheme: "com.gvalliappan.yotoscheduler",
     platforms: ["ios", "android"],
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
       backgroundColor: "#ffffff"
     },
+    updates: {
+      url: "https://u.expo.dev/7a24c41c-1c8a-4c69-807c-10668ac7aa83"
+    },
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.gvalliappan.yotoscheduler",
-      infoPlist: {
-        CFBundleURLTypes: [
-          {
-            CFBundleURLName: "com.gvalliappan.yotoscheduler",
-            CFBundleURLSchemes: ["com.gvalliappan.yotoscheduler"]
-          }
-        ],
-        UIBackgroundModes: ["background-fetch", "background-processing"]
-      }
+      runtimeVersion: "1.0.0"
     },
     android: {
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff"
       },
-      edgeToEdgeEnabled: true,
       package: "com.gvalliappan.yotoscheduler",
-      permissions: [
-        "android.permission.WAKE_LOCK",
-        "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.VIBRATE"
-      ],
-      intentFilters: [
-        {
-          action: "VIEW",
-          autoVerify: true,
-          data: [
-            {
-              scheme: "com.gvalliappan.yotoscheduler"
-            }
-          ],
-          category: ["BROWSABLE", "DEFAULT"]
-        }
-      ]
+      runtimeVersion: {
+        policy: "appVersion"
+      }
     },
     web: {
       favicon: "./assets/favicon.png"
     },
     plugins: [
-      "expo-dev-client",
       "expo-web-browser",
       [
         "expo-notifications",
@@ -65,21 +43,15 @@ export default {
           color: "#ffffff",
           sounds: []
         }
-      ],
-      "expo-task-manager",
-      "expo-background-fetch"
+      ]
     ],
     experiments: {
       typedRoutes: false
     },
     extra: {
-      router: {
-        origin: false
-      },
       eas: {
-        projectId: "f4de5acd-77d8-45d2-83ab-3262b7033ad9"
+        "projectId": "7a24c41c-1c8a-4c69-807c-10668ac7aa83"
       },
-      // Environment-specific configuration
       yotoClientId: process.env.YOTO_CLIENT_ID || "NJ4lW4Y3FrBcpR4R6YlkKs30gTxPjvC4",
       yotoRedirectUri: process.env.YOTO_REDIRECT_URI || "https://gandhiv88.github.io/yoto-callback/",
       logLevel: process.env.LOG_LEVEL || "debug"
