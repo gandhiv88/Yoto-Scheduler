@@ -43,7 +43,7 @@ A comprehensive React Native Expo application for controlling and scheduling Yot
 
 **Option B: QR Code Method (Alternative)**
 - **🌐 Open the development link above** on a desktop browser
-- **📱 Scan the QR code** displayed on the page with Expo Go camera
+- **📱 Scan the QR code** displayed on the page with camera
 
 **Step 3: Start Using the App**
 1. **✅ App loads automatically** in Expo Go
