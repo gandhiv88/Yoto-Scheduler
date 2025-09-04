@@ -2,6 +2,29 @@
 
 A comprehensive React Native Expo application for controlling and scheduling Yoto players via MQTT. This app transforms your mobile device into a powerful remote control and scheduler for your Yoto players, providing seamless audio card management and playback automation.
 
+## 🆕 **Latest Update: Background Scheduling Support!**
+
+**🌙 NEW:** Your schedules now work even when the app is closed! The latest version includes:
+- **Background task execution** - schedules run automatically in the background
+- **Smart notifications** - get alerts when schedules activate
+- **Background status monitoring** - check your device's background capabilities
+- **Improved reliability** - multiple fallback mechanisms for schedule execution
+
+**📱 Try it now with the updated Expo Go link below!**oto Scheduler 🎵
+
+A comprehensive React Native Expo application for controlling and scheduling Yoto players via MQTT. This app transforms your mobile device into a powerful remote control and scheduler for your Yoto players, providing seamless audio card management a### **Scheduling Audio Cards**
+1. **Open Scheduler**: Tap the "📅 Card Scheduler" tab
+2. **Add Schedule**: Tap "+" to create a new scheduled playback
+3. **Select Card**: Choose which audio card to play
+4. **Set Time**: Pick the time for automatic playback
+5. **Save**: Your schedule runs automatically even when the app is closed
+
+### **Background Scheduling**
+1. **Check Status**: Tap "🌙 Background Status" to view background capabilities
+2. **Enable Notifications**: Allow notifications for schedule alerts
+3. **Background Refresh**: Ensure Background App Refresh is enabled in iOS Settings
+4. **Reliability**: For best results, keep the app recently used or open near scheduled timesyback automation.
+
 ---
 
 ## 📱 **Quick Start - Try the App Now**
@@ -15,7 +38,7 @@ A comprehensive React Native Expo application for controlling and scheduling Yot
 **Step 2: Launch the App Instantly**
 
 **Option A: Direct Development Link (Recommended)**
-- **📲 Tap this link on your mobile device**: `https://expo.dev/preview/update?message=Publish+app+for+testing&updateRuntimeVersion=1.0.0&createdAt=2025-08-17T05%3A05%3A55.816Z&slug=exp&projectId=7a24c41c-1c8a-4c69-807c-10668ac7aa83&group=0aa154b6-820c-43b6-9975-67533d175baf`
+- **📲 Tap this link on your mobile device**: `https://expo.dev/preview/update?message=Add+background+scheduling+support+-+schedules+now+work+when+app+is+closed&updateRuntimeVersion=1.0.0&createdAt=2025-09-03T05%3A05%3A55.816Z&slug=exp&projectId=7a24c41c-1c8a-4c69-807c-10668ac7aa83&group=4bd5d84c-691b-4654-9680-a642efbf6e88`
 - **🔄 Auto-opens in Expo Go** - No QR scanning needed!
 
 **Option B: QR Code Method (Alternative)**
@@ -32,14 +55,14 @@ A comprehensive React Native Expo application for controlling and scheduling Yot
 
 #### **For iOS Users:**
 1. **Install Expo Go**: Search "Expo Go" in App Store and install
-2. **Open the link**: Tap `https://expo.dev/preview/update?message=Publish+app+for+testing&updateRuntimeVersion=1.0.0&createdAt=2025-08-17T05%3A05%3A55.816Z&slug=exp&projectId=7a24c41c-1c8a-4c69-807c-10668ac7aa83&group=0aa154b6-820c-43b6-9975-67533d175baf` on your iPhone
+2. **Open the link**: Tap `https://expo.dev/preview/update?message=Add+background+scheduling+support+-+schedules+now+work+when+app+is+closed&updateRuntimeVersion=1.0.0&createdAt=2025-09-03T05%3A05%3A55.816Z&slug=exp&projectId=7a24c41c-1c8a-4c69-807c-10668ac7aa83&group=4bd5d84c-691b-4654-9680-a642efbf6e88` on your iPhone
 3. **Allow app opening**: iOS will ask "Open in Expo Go?" - tap "Open"
 4. **Wait for loading**: App downloads and launches automatically
 5. **Login and enjoy**: Use your Yoto credentials to start controlling
 
 #### **For Android Users:**
 1. **Install Expo Go**: Search "Expo Go" in Google Play Store and install
-2. **Open the link**: Tap `https://expo.dev/preview/update?message=Publish+app+for+testing&updateRuntimeVersion=1.0.0&createdAt=2025-08-17T05%3A05%3A55.816Z&slug=exp&projectId=7a24c41c-1c8a-4c69-807c-10668ac7aa83&group=0aa154b6-820c-43b6-9975-67533d175baf` on your Android device
+2. **Open the link**: Tap `https://expo.dev/preview/update?message=Add+background+scheduling+support+-+schedules+now+work+when+app+is+closed&updateRuntimeVersion=1.0.0&createdAt=2025-09-03T05%3A05%3A55.816Z&slug=exp&projectId=7a24c41c-1c8a-4c69-807c-10668ac7aa83&group=4bd5d84c-691b-4654-9680-a642efbf6e88` on your Android device
 3. **Choose app**: Android will ask which app to open with - select "Expo Go"
 4. **Wait for loading**: App downloads and launches automatically
 5. **Login and enjoy**: Use your Yoto credentials to start controlling
@@ -56,6 +79,8 @@ npx expo start --tunnel
 ```
 
 **✨ No installation, no build process - just instant access to test the app!**
+
+> **📢 For existing users:** If you've used the app before, simply open it again in Expo Go and it will automatically update to the latest version with background scheduling support!
 
 ---
 
@@ -85,9 +110,11 @@ Yoto Scheduler bridges the gap between your Yoto players and modern scheduling n
 
 ### 📅 **Advanced Scheduling**
 - Schedule audio cards to play at specific times
+- **Background execution** - schedules work even when app is closed
 - Persistent scheduling that survives app restarts
+- Smart notifications for schedule activation
 - Visual schedule management with easy editing
-- Background scheduling execution
+- Background task monitoring and status
 
 ### 🔄 **Real-time Monitoring**
 - Live connection status updates

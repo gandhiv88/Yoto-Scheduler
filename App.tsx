@@ -16,9 +16,11 @@ import { YotoAuth } from './src/services/authService';
 import { YotoAPI } from './src/services/apiService';
 import { MqttClient } from './src/services/mqttService';
 import { SchedulerService } from './src/services/simpleSchedulerService';
+import { BackgroundSchedulerService } from './src/services/backgroundSchedulerService';
 import { AmbientLightControl } from './src/components/AmbientLightControl';
 import { SchedulerScreen } from './src/components/SchedulerScreen';
 import { BatteryStatus } from './src/components/BatteryStatus';
+import { BackgroundSchedulerStatus } from './src/components/BackgroundSchedulerStatus';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { SnackBarProvider, useSnackBarContext } from './src/contexts/SnackBarContext';
 import { YOTO_CLIENT_ID, validateConfig } from './src/config/env';
@@ -36,6 +38,7 @@ const AppContent: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
   const [showAmbientControl, setShowAmbientControl] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
+  const [showBackgroundStatus, setShowBackgroundStatus] = useState(false);
   const [processedCallbackUrl, setProcessedCallbackUrl] = useState<string | null>(null);
   const [batteryInfo, setBatteryInfo] = useState<any>(null);
   const [authUrl, setAuthUrl] = useState<string>('');
@@ -62,6 +65,9 @@ const AppContent: React.FC = () => {
     
     // Initialize scheduler service
     SchedulerService.initialize().catch(console.error);
+    
+    // Initialize background scheduler service
+    BackgroundSchedulerService.initialize().catch(console.error);
     
     // Cleanup function for timers and connections
     return () => {
@@ -377,6 +383,14 @@ const AppContent: React.FC = () => {
     );
   }
 
+  if (showBackgroundStatus) {
+    return (
+      <BackgroundSchedulerStatus
+        onBack={() => setShowBackgroundStatus(false)}
+      />
+    );
+  }
+
   if (showAmbientControl && selectedPlayer && mqttClient) {
     return (
       <AmbientLightControl
@@ -477,6 +491,13 @@ const AppContent: React.FC = () => {
               onPress={() => setShowScheduler(true)}
             >
               <Text style={styles.controlButtonText}>📅 Card Scheduler</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.controlButton}
+              onPress={() => setShowBackgroundStatus(true)}
+            >
+              <Text style={styles.controlButtonText}>🌙 Background Status</Text>
             </TouchableOpacity>
             
             {/* Playback Controls */}
