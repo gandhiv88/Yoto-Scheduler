@@ -10,7 +10,9 @@ A comprehensive React Native Expo application for controlling and scheduling Yot
 - **Background status monitoring** - check your device's background capabilities
 - **Improved reliability** - multiple fallback mechanisms for schedule execution
 
-**📱 Try it now with the updated Expo Go link below!**oto Scheduler 🎵
+**⚠️ Important:** Background scheduling requires a **development build**, not Expo Go. Expo Go only supports foreground scheduling for testing basic functionality.
+
+**📱 For full background scheduling capabilities, use the development build instructions below!**oto Scheduler 🎵
 
 A comprehensive React Native Expo application for controlling and scheduling Yoto players via MQTT. This app transforms your mobile device into a powerful remote control and scheduler for your Yoto players, providing seamless audio card management a### **Scheduling Audio Cards**
 1. **Open Scheduler**: Tap the "📅 Card Scheduler" tab
@@ -353,6 +355,21 @@ extra: {
 - Verify the app has background permissions
 - Check that your device's clock is accurate
 - Ensure the scheduled time is in the future
+
+#### **Ambient Light Color Mismatch**
+If the colors on your Yoto player don't match what you selected in the app:
+
+1. **Use the Color Testing section** in Ambient Light Control to test primary colors
+2. **Check debug information** - the app shows RGB values being sent to the device
+3. **Try pure colors first** - Red (#FF0000), Green (#00FF00), Blue (#0000FF)
+4. **Brightness affects color accuracy** - try 75-100% brightness for color testing
+5. **BGR conversion** - the app automatically handles Yoto's BGR color format
+
+**Technical Details:**
+- Yoto devices expect standard RGB color format
+- The app sends colors directly as selected: RGB(255,0,0) for pure red
+- Brightness scaling is applied before sending to device
+- Example: Pure red at 50% brightness: RGB(255,0,0) → RGB(128,0,0) sent to device
 
 ### **Debug Information**
 Enable debug logging by setting `LOG_LEVEL: 'debug'` in `src/config/env.js` for detailed console output.

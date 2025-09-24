@@ -19,8 +19,10 @@ import { SchedulerService } from './src/services/simpleSchedulerService';
 import { BackgroundSchedulerService } from './src/services/backgroundSchedulerService';
 import { AmbientLightControl } from './src/components/AmbientLightControl';
 import { SchedulerScreen } from './src/components/SchedulerScreen';
-import { BatteryStatus } from './src/components/BatteryStatus';
 import { BackgroundSchedulerStatus } from './src/components/BackgroundSchedulerStatus';
+import { ExpoGoBackgroundStatus } from './src/components/ExpoGoBackgroundStatus';
+import Constants from 'expo-constants';
+import { BatteryStatus } from './src/components/BatteryStatus';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { SnackBarProvider, useSnackBarContext } from './src/contexts/SnackBarContext';
 import { YOTO_CLIENT_ID, validateConfig } from './src/config/env';
@@ -66,8 +68,14 @@ const AppContent: React.FC = () => {
     // Initialize scheduler service
     SchedulerService.initialize().catch(console.error);
     
-    // Initialize background scheduler service
-    BackgroundSchedulerService.initialize().catch(console.error);
+    // Initialize background scheduler service based on environment
+    const isExpoGo = Constants.appOwnership === 'expo';
+    if (isExpoGo) {
+      // ExpoGo scheduler will be initialized when needed in ExpoGoBackgroundStatus component
+      console.log('Running in Expo Go - using notification-based scheduler');
+    } else {
+      BackgroundSchedulerService.initialize().catch(console.error);
+    }
     
     // Cleanup function for timers and connections
     return () => {
@@ -384,11 +392,22 @@ const AppContent: React.FC = () => {
   }
 
   if (showBackgroundStatus) {
-    return (
-      <BackgroundSchedulerStatus
-        onBack={() => setShowBackgroundStatus(false)}
-      />
-    );
+    // Use ExpoGoBackgroundStatus in Expo Go, BackgroundSchedulerStatus in dev build
+    const isExpoGo = Constants.appOwnership === 'expo';
+    
+    if (isExpoGo) {
+      return (
+        <ExpoGoBackgroundStatus
+          onBack={() => setShowBackgroundStatus(false)}
+        />
+      );
+    } else {
+      return (
+        <BackgroundSchedulerStatus
+          onBack={() => setShowBackgroundStatus(false)}
+        />
+      );
+    }
   }
 
   if (showAmbientControl && selectedPlayer && mqttClient) {

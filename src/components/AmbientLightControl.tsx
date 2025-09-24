@@ -42,38 +42,20 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
 
   const predefinedColors = [
     { name: 'White', color: '#FFFFFF' },
-    { name: 'Warm White', color: '#FFE5B4' },
-    { name: 'Red', color: '#FF6B6B' },
-    { name: 'Orange', color: '#FFA726' },
-    { name: 'Yellow', color: '#FFEB3B' },
-    { name: 'Green', color: '#66BB6A' },
-    { name: 'Blue', color: '#42A5F5' },
-    { name: 'Purple', color: '#AB47BC' },
-    { name: 'Pink', color: '#EC407A' },
-    { name: 'Teal', color: '#26A69A' },
+    { name: 'Warm White', color: '#FFF0E6' },
+    { name: 'Red', color: '#FF0000' },      // Pure red
+    { name: 'Orange', color: '#FF8000' },   // Pure orange
+    { name: 'Yellow', color: '#FFFF00' },   // Pure yellow
+    { name: 'Green', color: '#00FF00' },    // Pure green
+    { name: 'Blue', color: '#0000FF' },     // Pure blue
+    { name: 'Purple', color: '#8000FF' },   // Pure purple
+    { name: 'Pink', color: '#FF0080' },     // Pure pink
+    { name: 'Cyan', color: '#00FFFF' },     // Pure cyan
   ];
 
   const handleSetAmbientLight = async () => {
     setIsLoading(true);
     try {
-      console.log('💡 [AMBIENT] Setting ambient light:', {
-        playerId: player.id,
-        brightness: brightness,
-        color: selectedColor,
-        playerName: player.name
-      });
-
-      // Check if MQTT client is properly connected
-      if (!mqttClient) {
-        throw new Error('MQTT client not available');
-      }
-
-      // Check if the client has the method we need
-      if (typeof mqttClient.setAmbientLight !== 'function') {
-        throw new Error('setAmbientLight method not available on MQTT client');
-      }
-
-      // Try the ambient light command
       await mqttClient.setAmbientLight(player.id, brightness, selectedColor);
       const colorName = predefinedColors.find(c => c.color === selectedColor)?.name || 'selected color';
       showSuccess(`Ambient light set to ${brightness}% brightness with ${colorName}`);
@@ -102,6 +84,16 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Helper function to convert hex to RGB (matches MQTT service)
+  const hexToRgb = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 255, g: 255, b: 255 }; // Default to white if parsing fails
   };
 
   const handleTurnOffLight = async () => {
@@ -311,19 +303,19 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
           <TouchableOpacity
             style={[styles.quickActionButton, styles.warmButton]}
             onPress={() => {
-              setSelectedColor('#FFE5B4');
+              setSelectedColor('#FFF0E6');
               setBrightness(30);
               handleSetAmbientLight();
             }}
             disabled={isLoading}
           >
-            <Text style={styles.quickActionText}>Warm Reading Light</Text>
+            <Text style={styles.quickActionText}>Warm Reading</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.quickActionButton, styles.sleepButton]}
             onPress={() => {
-              setSelectedColor('#FF6B6B');
+              setSelectedColor('#FF0000');
               setBrightness(10);
               handleSetAmbientLight();
             }}
@@ -335,7 +327,7 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
           <TouchableOpacity
             style={[styles.quickActionButton, styles.playButton]}
             onPress={() => {
-              setSelectedColor('#42A5F5');
+              setSelectedColor('#0000FF');
               setBrightness(60);
               handleSetAmbientLight();
             }}
@@ -344,6 +336,44 @@ export const AmbientLightControl: React.FC<AmbientLightControlProps> = ({
             <Text style={styles.quickActionText}>Play Time</Text>
           </TouchableOpacity>
         </View>
+      </View>
+
+      {/* Color Testing Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>🧪 Color Testing</Text>
+        <Text style={styles.testDescription}>
+          Test primary colors to verify color accuracy on your device
+        </Text>
+        <View style={styles.colorTestGrid}>
+          {[
+            { name: 'Red', color: '#FF0000' },
+            { name: 'Green', color: '#00FF00' },
+            { name: 'Blue', color: '#0000FF' },
+            { name: 'White', color: '#FFFFFF' },
+          ].map((testColor) => (
+            <TouchableOpacity
+              key={testColor.name}
+              style={[styles.colorTestButton, { backgroundColor: testColor.color }]}
+              onPress={() => {
+                setSelectedColor(testColor.color);
+                setBrightness(75);
+                // Auto-apply for testing
+                setTimeout(() => handleSetAmbientLight(), 100);
+              }}
+              disabled={isLoading}
+            >
+              <Text style={[
+                styles.colorTestText,
+                testColor.name === 'White' ? { color: '#333' } : { color: '#FFF' }
+              ]}>
+                {testColor.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.testNote}>
+          💡 Test these colors to verify they display correctly on your device
+        </Text>
       </View>
     </ScrollView>
   );
@@ -571,5 +601,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  testDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  colorTestGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 15,
+  },
+  colorTestButton: {
+    width: 70,
+    height: 50,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#DDD',
+  },
+  colorTestText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  testNote: {
+    fontSize: 12,
+    color: '#888',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });
