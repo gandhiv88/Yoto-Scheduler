@@ -40,11 +40,17 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.gvalliappan.yotoscheduler",
+      "versionCode": 1,
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
       "permissions": [
         "android.permission.WAKE_LOCK",
         "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
       ],
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.gvalliappan.yotoscheduler",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -66,6 +72,7 @@
     },
     "plugins": [
       "expo-web-browser",
+      "expo-secure-store",
       [
         "expo-notifications",
         {
